@@ -1,0 +1,14 @@
+# Copyright 2025, pan (pan_@disroot.org)
+# SPDX-License-Identifier: MIT-0
+
+test/pj
+test/jsc/*
+!test/jsc/README.md
+
+examples/*
+!examples/*.c
+
+pjson_aux*
+
+trash/
+tags*
