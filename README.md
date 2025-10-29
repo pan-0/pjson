@@ -6,7 +6,7 @@ The goal is a small, freestanding implementation that handles the most tedious p
 
 The interface is "SAX"-style; the user receives back parsing events and is responsible for how to handle them. As such, the parser uses very little memory. It's also very slow. A fixed number of around ~`48` bytes for the internal state and `4` bits per parser state, the stack of which is provided by the user.
 
-It's _very_ primitive, but quite workable for basic tasks like validation. With _some_ effort, one can build on top of this to create a DOM-style API; see [examples/pjdom.c](./examples/pjdom.c).
+It's _very_ primitive, but quite workable for basic tasks like validation. With _some_ effort, one can build on top of this to create a DOM-style API; see [`examples/pjdom.c`](./examples/pjdom.c).
 
 As mentioned, this implements RFC 8259 and _only it_. Only UTF-8 is supported. No other encodings, no JSON5, JSONC, JSONPath, JSON Schema, etc. Of note is that numbers aren't converted into binary form. Instead, the parser only validates their _syntax_ (that they correctly follow the grammar as in the RFC) and returns them back as-is. This is mainly because C's standard library offerings (`strtod()`) aren't suitable for this task, unfortunately. And a from-scratch implementation would more than _double_ the line count. Parsing floating point numbers turns out to be harder than parsing JSON.
 
@@ -21,7 +21,7 @@ If you're looking for a library that handles all those issues, offers better per
 
 bool is_valid_json(size_t size, const void *buf)
 {
-    unsigned char stack_buf[128];
+    unsigned char stack_buf[128] = {0};  /* Must zero-initialize. */
 
     pjson_context ctx;
     pjson_init(&ctx, (pjson_block){sizeof stack_buf, stack_buf});
@@ -61,7 +61,7 @@ valid:
 
 TODO
 
-Until then, hopefully, [pjson.h](./pjson.h) and the programs in [examples/](./examples) clear up any confusion.
+Until then, hopefully, [`pjson.h`](./pjson.h) and the programs in [`examples/`](./examples) clear up any confusion.
 
 # LICENSE
 ```

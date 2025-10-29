@@ -1271,7 +1271,7 @@ inline static void pj_reset(pjson_context *ctx)
 
 PJSON_API void pjson_init(pjson_context *restrict ctx, pjson_block block)
 {
-	pj_assert(block.size >= PJ_MIN_STACK);
+	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
 	ctx->stack_size = block.size;
 	ctx->stack      = block.ptr;
@@ -1347,18 +1347,18 @@ PJSON_API enum pjson_state pjson_current_state(const pjson_context *ctx)
 		[PJ_PARSER_STATE_DONE]          = PJSON_STATE_NONE
 	};
 	pjson_usize top = ctx->stack_top;
-	enum pj_parser_state top_val = (enum pj_parser_state)ctx->stack[top];
+	enum pj_parser_state top_val = pj_stack_get(ctx, top);
 	return (enum pjson_state)(
 		top_val == PJ_PARSER_STATE_WAIT_TOKEN
 		|| top_val == PJ_PARSER_STATE_VALUE
-			? to_pub[ctx->stack[top - 1]]
+			? to_pub[pj_stack_get(ctx, top - 1)]
 			: to_pub[top_val]
 	);
 }
 
 PJSON_API void pjson_resize(pjson_context *restrict ctx, pjson_block block)
 {
-	pj_assert((block.size >= 2) & (block.ptr != (void *)0));
+	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
 	ctx->stack_size = block.size;
 	ctx->stack = block.ptr;
@@ -1383,3 +1383,9 @@ PJSON_API pjson_usize pjson_stack_used(const pjson_context *ctx)
 {
 	return pj_stack_used(ctx);
 }
+
+
+/*
+ * TODO: Could probably take advantage of the padding inside `pjson_context`
+ *       and provide a very tiny (2-4 bytes) "inline" stack buffer by default.
+ */

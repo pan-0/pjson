@@ -19,9 +19,9 @@
 #include <errno.h>    /* errno */
 #include <stdbool.h>  /* bool, true, false */
 #include <stddef.h>   /* size_t, ptrdiff_t, NULL, [offsetof(), max_align_t] */
-#include <stdlib.h>   /* malloc(), realloc(), free(), strtod(), strtoll() */
+#include <stdlib.h>   /* malloc(), free(), strtod(), strtoll() */
 #include <stdint.h>   /* SIZE_MAX, uintptr_t */
-#include <string.h>   /* memcpy() */
+#include <string.h>   /* memcpy(), memset() */
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -655,23 +655,6 @@ typedef struct {
 	usize len;
 } entry;
 
-static entry *new_stack(usize stack_len, entry *stack)
-{
-	const struct blayout lays[] = {
-		{stack_len, sizeof(entry), alignof(entry)},
-		{stack_len, 1, 1}
-	};
-	usize block_size = blcalc(ALIGNMENT, 0, 2, lays, 0);
-	if (unlikely(block_size == 0))
-		return NULL;
-
-	stack = realloc(stack, block_size);
-	if (unlikely(stack == NULL))
-		return NULL;
-
-	return stack;
-}
-
 inline static value *push(const pjson_context *ctx, entry *top, lina *lin)
 {
 	++(top->len);
@@ -691,15 +674,17 @@ static value *parse(usize size,
                     const void *dec_point,
                     lina *lin)
 {
+	enum { stack_len = 128 };
 
-	usize stack_len = 32;
-	entry *stack = new_stack(stack_len, NULL);
+	entry *stack = lina_alloc(lin, stack_len * sizeof(*stack), alignof(stack));
 	if (unlikely(stack == NULL))
 		return NULL;
 
-	unsigned char *restrict parser_stack = blnext(stack,
-	                                              stack_len * sizeof(entry),
-	                                              1);
+	unsigned char *restrict parser_stack = lina_alloc(lin, stack_len, 1);
+	if (unlikely(parser_stack == NULL))
+		return NULL;
+
+	memset(parser_stack, 0, stack_len);
 	pjson_context ctx;
 	pjson_init(&ctx, (pjson_block){stack_len, parser_stack});
 
@@ -729,7 +714,7 @@ static value *parse(usize size,
 					};
 					value *val = push(&ctx, top, lin);
 					if (unlikely(val == NULL))
-						goto err;
+						return NULL;
 
 					val->tag = (enum value_kind)to_kind[res.event];
 				}
@@ -738,22 +723,9 @@ static value *parse(usize size,
 			case PJSON_EVENT_BEGIN_OBJECT:
 			case PJSON_EVENT_BEGIN_ARRAY:
 				++top;
-				if (unlikely(top == stack + stack_len)) {
-					usize new_stack_len = stack_len << 1;
-					if (unlikely(new_stack_len <= stack_len))
-						goto err;
+				if (unlikely(top == stack + stack_len))
+					return NULL;
 
-					entry *newstack = new_stack(new_stack_len, stack);
-					if (unlikely(newstack == NULL))
-						goto err;
-
-					stack = newstack;
-					top = stack + stack_len;
-					stack_len = new_stack_len;
-
-					parser_stack = blnext(stack, stack_len * sizeof(entry), 1);
-					pjson_resize(&ctx, (pjson_block){stack_len, parser_stack});
-				}
 				*top = (entry){list_new(), 0};
 				break;
 
@@ -763,11 +735,11 @@ static value *parse(usize size,
 					--top;
 					value *val = push(&ctx, top, lin);
 					if (unlikely(val == NULL))
-						goto err;
+						return NULL;
 
 					value_tag tag = tag_with_length(VALUE_ARRAY, array.len);
 					if (unlikely(tag == 0))
-						goto err;
+						return NULL;
 
 					val->tag = tag;
 					val->u.array = array.lst;
@@ -780,11 +752,11 @@ static value *parse(usize size,
 					--top;
 					value *val = push(&ctx, top, lin);
 					if (unlikely(val == NULL))
-						goto err;
+						return NULL;
 
 					value_tag tag = tag_with_length(VALUE_OBJECT, object.len);
 					if (unlikely(tag == 0))
-						goto err;
+						return NULL;
 
 					val->tag = tag;
 					val->u.object = object.lst;
@@ -797,7 +769,7 @@ static value *parse(usize size,
 					                     dec_point_len,
 					                     dec_point,
 					                     lin))
-						goto err;
+						return NULL;
 
 					break;
 				}
@@ -807,7 +779,7 @@ static value *parse(usize size,
 				                     res.code_size,
 				                     res.code_bytes,
 				                     lin))
-					goto err;
+					return NULL;
 
 				break;
 
@@ -816,19 +788,19 @@ static value *parse(usize size,
 				if (pjson_current_state(&ctx) == PJSON_STATE_IN_KEY) {
 					member *mem = list_push(&top->lst, member_lay, lin);
 					if (unlikely(mem == NULL))
-						goto err;
+						return NULL;
 
 					mem->key = (string){bytearray_size(&codes), codes.buf};
 				}
 				else {
 					value *val = push(&ctx, top, lin);
 					if (unlikely(val == NULL))
-						goto err;
+						return NULL;
 
 					value_tag tag = tag_with_length(VALUE_STRING,
 					                                bytearray_size(&codes));
 					if (unlikely(tag == 0))
-						goto err;
+						return NULL;
 
 					val->tag = tag;
 					val->u.str = codes.buf;
@@ -838,12 +810,12 @@ static value *parse(usize size,
 
 			case PJSON_EVENT_END_NUMBER_FLOAT:
 				if (bytearray_push_n(&codes, 1, &bytearray_sentinel, lin))
-					goto err;
+					return NULL;
 
 				{
 					atod_res r = atod(codes.buf);
 					if (unlikely(r.err))
-						goto err;
+						return NULL;
 
 					bytearray_fini(&codes, lin);
 					value *val = push(&ctx, top, lin);
@@ -855,12 +827,12 @@ static value *parse(usize size,
 
 			case PJSON_EVENT_END_NUMBER_INTEGER:
 				if (bytearray_push_n(&codes, 1, &bytearray_sentinel, lin))
-					goto err;
+					return NULL;
 
 				{
 					atoll_res r = atollx(codes.buf);
 					if (unlikely(r.err))
-						goto err;
+						return NULL;
 
 					bytearray_fini(&codes, lin);
 					value *val = push(&ctx, top, lin);
@@ -879,29 +851,8 @@ static value *parse(usize size,
 			++i;
 			break;
 
-		case PJSON_STATUS_ERROR:
-			if (unlikely(res.event == PJSON_EVENT_ERROR_STACK_LIMIT)) {
-				usize top_offset = (usize)(top - stack);
-				usize new_stack_len = stack_len << 1;
-				if (unlikely(new_stack_len <= stack_len))
-					goto err;
-
-				entry *newstack = new_stack(new_stack_len, stack);
-				if (unlikely(newstack == NULL))
-					goto err;
-
-				stack = newstack;
-				top = stack + top_offset;
-				stack_len = new_stack_len;
-
-				parser_stack = blnext(stack, stack_len * sizeof(entry), 1);
-				pjson_resize(&ctx, (pjson_block){stack_len, parser_stack});
-				break;
-			}
-			goto err;
-
-		case PJSON_STATUS_DONE:
-			goto end;
+		case PJSON_STATUS_ERROR: return NULL;
+		case PJSON_STATUS_DONE:  goto end;
 
 		default:
 			unreachable();
@@ -911,12 +862,7 @@ static value *parse(usize size,
 end:
 	;
 	value *dom = list_first(&stack[0].lst, alignof(value));
-	free(stack);
 	return dom;
-
-err:
-	free(stack);
-	return NULL;
 }
 
 
@@ -1140,6 +1086,8 @@ int main(int argc, char *argv[])
 	const void *dec_point = localeconv()->decimal_point;
 	usize dec_point_len = strlen(dec_point);
 
+	int ret = EXIT_FAILURE;
+
 	FILE *stream;
 	if (argc != 2 || argv == NULL || argv[1] == NULL
 			|| strcmp(argv[1], "-") == 0) {
@@ -1148,7 +1096,7 @@ int main(int argc, char *argv[])
 	else {
 		stream = fopen(argv[1], "rb");
 		if (unlikely(stream == NULL))
-			return EXIT_FAILURE;
+			return ret;
 	}
 
 	filebuffer filebuf = fload(stream);
@@ -1156,7 +1104,7 @@ int main(int argc, char *argv[])
 		(void) fclose(stream);
 
 	if (unlikely(filebuf.size == 0))
-		return EXIT_FAILURE;
+		return ret;
 
 	lina lin = lina_new(32 * 1024);
 	value *dom = parse(filebuf.size,
@@ -1166,9 +1114,12 @@ int main(int argc, char *argv[])
 	                   &lin);
 	free(filebuf.data);
 	if (dom == NULL)
-		return EXIT_FAILURE;
+		goto end;
 
 	print_dom(dom);
+	ret = EXIT_SUCCESS;
+
+end:
 	lina_fini(&lin);
-	return EXIT_SUCCESS;
+	return ret;
 }

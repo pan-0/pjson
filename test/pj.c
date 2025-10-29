@@ -10,9 +10,9 @@
 #include <stddef.h>   /* size_t, NULL, SIZE_MAX */
 /* stdin, stderr, fread(), fprintf(), ferror(), fopen(), fclose(), FILE */
 #include <stdio.h>
-/* abort(), strtol(), malloc(), realloc(), free(), EXIT_* */
+/* abort(), strtol(), calloc(), realloc(), free(), EXIT_* */
 #include <stdlib.h>
-#include <string.h>   /* strcmp() */
+#include <string.h>   /* memset(), strcmp() */
 #include <errno.h>    /* errno */
 #include <unistd.h>   /* getopt() */
 
@@ -119,9 +119,9 @@ int main(int argc, char *argv[])
 			return ret;
 	}
 
-	block.ptr = malloc(block.size);
+	block.ptr = calloc(block.size, 1);
 	if (block.ptr == NULL)
-		goto err_malloc;
+		goto err_calloc;
 
 	pjson_context ctx;
 	pjson_init(&ctx, block);
@@ -171,6 +171,10 @@ int main(int argc, char *argv[])
 					if (new_ptr == NULL)
 						goto end;
 
+					memset((char *)new_ptr + block.size,
+					       0,
+					       new_size - block.size);
+
 					block.size = new_size;
 					block.ptr = new_ptr;
 					pjson_resize(&ctx, block);
@@ -197,7 +201,7 @@ retry:
 
 end:
 	free(block.ptr);
-err_malloc:
+err_calloc:
 	if (stream != stdin)
 		(void) fclose(stream);
 

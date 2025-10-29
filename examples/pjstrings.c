@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 			return ret;
 	}
 
-	unsigned char stack_buf[128];
+	unsigned char stack_buf[128] = {0};
 	pjson_context ctx;
 	pjson_init(&ctx, (pjson_block){sizeof stack_buf, stack_buf});
 

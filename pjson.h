@@ -130,7 +130,9 @@ typedef struct {
 	unsigned char   lexer_state;  /* Lexical analyser state. */
 	pjson_surrogate high;         /* UTF-16 high surrogate. */
 	pjson_surrogate low;          /* UTF-16 low surrogate. */
+	/* <- Most likely 2 bytes of padding here. -> */
 	pjson_codepoint utf8_buf;     /* UTF-8 codepoint "buffer". */
+	/* <- Most likely 4 bytes of padding here. -> */
 	pjson_usize     byte_count;   /* Bytes processed so far. */
 	pjson_usize     stack_size;   /* Parser stack size in bytes. */
 	pjson_usize     stack_top;    /* Index to the most recently pushed item. */
