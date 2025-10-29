@@ -500,10 +500,10 @@ inline static pjson_result pj_lexer_ascii_result(enum pjson_status status,
 {
 	pj_assume(codepoint < 128);
 
-	return (pjson_result){.status     =status,
-	                      .event      =(enum pjson_event)event,
-	                      .code_size=1,
-	                      .code_bytes ={codepoint, '\0'}};
+	return (pjson_result){.status    =status,
+	                      .event     =(enum pjson_event)event,
+	                      .code_size =1,
+	                      .code_bytes={codepoint, '\0'}};
 }
 
 static
