@@ -860,9 +860,7 @@ static value *parse(usize size,
 	}
 
 end:
-	;
-	value *dom = list_first(&stack[0].lst, alignof(value));
-	return dom;
+	return list_first(&stack[0].lst, alignof(value));
 }
 
 
