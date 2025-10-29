@@ -660,9 +660,9 @@ inline static value *push(const pjson_context *ctx, entry *top, lina *lin)
 	++(top->len);
 
 	if (pjson_current_state(ctx) == PJSON_STATE_IN_OBJECT) {
-		value *val = &((member *) list_last(&top->lst, alignof(member)))->val;
-		assert(val != NULL);
-		return val;
+		member *mem = list_last(&top->lst, alignof(member));
+		assert(mem != NULL);
+		return &mem->val;
 	}
 
 	return list_push(&top->lst, value_lay, lin);
