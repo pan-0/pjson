@@ -985,10 +985,10 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
  */
 
 enum pj_parser_state {
-	PJ_PARSER_STATE_WAIT_TOKEN    = 0u,
+	PJ_PARSER_STATE_VALUE         = 0u,
+	PJ_PARSER_STATE_WAIT_TOKEN    = 1u,
 
-	PJ_PARSER_STATE_ELEMENT_LIST  = 1u,
-	PJ_PARSER_STATE_VALUE         = 2u,
+	PJ_PARSER_STATE_ELEMENT_LIST  = 2u,
 	PJ_PARSER_STATE_ELEMENT_AFTER = 3u,
 
 	PJ_PARSER_STATE_MEMBER_LIST   = 4u,
@@ -1101,6 +1101,39 @@ inline static void pj_stack_pop(pjson_context *ctx)
 	--(ctx->stack_top);
 }
 
+static pjson_result pj_parse_value(pjson_context *ctx,
+                                   pjson_result lexer_res,
+                                   pj_usize top)
+{
+	switch (lexer_res.event) {
+	case PJ_LEXER_EVENT_TOKEN_NULL:
+	case PJ_LEXER_EVENT_TOKEN_TRUE:
+	case PJ_LEXER_EVENT_TOKEN_FALSE:
+		pj_stack_pop(ctx);
+		return lexer_res;
+
+	case PJ_LEXER_EVENT_BEGIN_STRING:
+		pj_stack_set(ctx, top, PJ_PARSER_STATE_WAIT_TOKEN);
+		return (pjson_result){PJSON_STATUS_OKAY};
+
+	case PJ_LEXER_EVENT_TOKEN_LEFT_CURLY:
+		pj_stack_set(ctx, top, PJ_PARSER_STATE_MEMBER_LIST);
+		return lexer_res;
+
+	case PJ_LEXER_EVENT_TOKEN_LEFT_BRACKET:
+		pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_LIST);
+		return lexer_res;
+
+	case PJ_LEXER_EVENT_NUMBER_CODE:
+		pj_stack_set(ctx, top, PJ_PARSER_STATE_WAIT_TOKEN);
+		return lexer_res;
+
+	default:
+		return (pjson_result){PJSON_STATUS_ERROR,
+		                      PJSON_EVENT_ERROR_EXPECT_VALUE};
+	}
+}
+
 static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 {
 	/*
@@ -1123,6 +1156,9 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 
 	pj_usize top = ctx->stack_top;
 	switch (pj_stack_get(ctx, top)) {
+	/* value */
+	case PJ_PARSER_STATE_VALUE:
+		return pj_parse_value(ctx, lexer_res, top);
 	case PJ_PARSER_STATE_WAIT_TOKEN:
 		switch (lexer_res.event) {
 		case PJ_LEXER_EVENT_END_NUMBER_FLOAT:
@@ -1146,36 +1182,13 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 			                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
 		pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_AFTER);
-		++top;
-		pj_fallthrough;
-	/* value */
-	case PJ_PARSER_STATE_VALUE:
-		switch (lexer_res.event) {
-		case PJ_LEXER_EVENT_TOKEN_NULL:
-		case PJ_LEXER_EVENT_TOKEN_TRUE:
-		case PJ_LEXER_EVENT_TOKEN_FALSE:
-			pj_stack_pop(ctx);
-			return lexer_res;
-
-		case PJ_LEXER_EVENT_BEGIN_STRING:
-			pj_stack_set(ctx, top, PJ_PARSER_STATE_WAIT_TOKEN);
-			return (pjson_result){PJSON_STATUS_OKAY};
-
-		case PJ_LEXER_EVENT_TOKEN_LEFT_CURLY:
-			pj_stack_set(ctx, top, PJ_PARSER_STATE_MEMBER_LIST);
-			return lexer_res;
-
-		case PJ_LEXER_EVENT_TOKEN_LEFT_BRACKET:
+		lexer_res = pj_parse_value(ctx, lexer_res, top + 1);
+		if (pj_unlikely(lexer_res.status == PJSON_STATUS_ERROR)) {
+			/* Reset parser state in case of error. */
 			pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_LIST);
-			return lexer_res;
-
-		case PJ_LEXER_EVENT_NUMBER_CODE:
-			pj_stack_set(ctx, top, PJ_PARSER_STATE_WAIT_TOKEN);
-			return lexer_res;
-
-		default:
-			return (pjson_result){PJSON_STATUS_ERROR};
+			pj_stack_pop(ctx);
 		}
+		return lexer_res;
 	case PJ_PARSER_STATE_ELEMENT_AFTER:
 		switch (lexer_res.event) {
 		case PJ_LEXER_EVENT_TOKEN_COMMA:

@@ -69,15 +69,16 @@ enum pjson_event {
 	/*
 	 * These are valid only if the status is `PJSON_STATUS_ERROR`.
 	 */
-	PJSON_EVENT_ERROR_UNKNOWN       = -14,  /* Unknown token/character. */
-	PJSON_EVENT_ERROR_DIGIT         = -13,  /* Expected (decimal) digit. */
-	PJSON_EVENT_ERROR_EXPONENT      = -12,  /* Expected exponent. */
-	PJSON_EVENT_ERROR_CODEPOINT     = -11,  /* Invalid codepoint. */
-	PJSON_EVENT_ERROR_ESCAPE        = -10,  /* Expected escape character. */
-	PJSON_EVENT_ERROR_HEXDIGIT      =  -9,  /* Expected hexadecimal digit. */
-	PJSON_EVENT_ERROR_HIGH_LOW      =  -8,  /* Expected high surrogate. */
-	PJSON_EVENT_ERROR_LOW           =  -7,  /* Expected low surrogate. */
-	PJSON_EVENT_ERROR_TOKEN         =  -6,  /* Unexpected token. */
+	PJSON_EVENT_ERROR_UNKNOWN       = -15,  /* Unknown token/character. */
+	PJSON_EVENT_ERROR_DIGIT         = -14,  /* Expected (decimal) digit. */
+	PJSON_EVENT_ERROR_EXPONENT      = -13,  /* Expected exponent. */
+	PJSON_EVENT_ERROR_CODEPOINT     = -12,  /* Invalid codepoint. */
+	PJSON_EVENT_ERROR_ESCAPE        = -11,  /* Expected escape character. */
+	PJSON_EVENT_ERROR_HEXDIGIT      = -10,  /* Expected hexadecimal digit. */
+	PJSON_EVENT_ERROR_HIGH_LOW      =  -9,  /* Expected high surrogate. */
+	PJSON_EVENT_ERROR_LOW           =  -8,  /* Expected low surrogate. */
+	PJSON_EVENT_ERROR_TOKEN         =  -7,  /* Unexpected token. */
+	PJSON_EVENT_ERROR_EXPECT_VALUE  =  -6,  /* Expected JSON value. */
 	PJSON_EVENT_ERROR_EXPECT_STRING =  -5,  /* Expected string. */
 	PJSON_EVENT_ERROR_EXPECT_COLON  =  -4,  /* Expected colon (':'). */
 	PJSON_EVENT_ERROR_EXPECT_DONE   =  -3,  /* Expected `PJSON_END`. */
