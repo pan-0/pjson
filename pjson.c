@@ -1286,6 +1286,7 @@ PJSON_API void pjson_init(pjson_context *restrict ctx, pjson_block block)
 {
 	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
+	ctx->utf8_buf   = 0;
 	ctx->stack_size = block.size;
 	ctx->stack      = block.ptr;
 	pj_stack_set(ctx, 0, PJ_PARSER_STATE_DONE);  /* This is never popped. */
