@@ -920,6 +920,9 @@ static filebuffer fload(FILE *f)
 	} while (read == chunksize);
 
 	buf.size = buf.size - chunksize + read;
+	if (buf.size == 0)
+		goto err;
+
 	return buf;
 
 err:

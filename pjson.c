@@ -1008,9 +1008,9 @@ enum pj_parser_state {
 #define PJ_MIN_STACK 1  /* Mininum stack size in bytes. */
 
 enum {
-	PJ_STATE_BITS  = 4u,
-	PJ_MAX_COLUMNS = (unsigned)CHAR_BIT / PJ_STATE_BITS,
-	PJ_MASK        = (1u << PJ_STATE_BITS) - 1
+	PJ_STATE_BITS = 4u,
+	PJ_COLUMNS    = (unsigned)CHAR_BIT / PJ_STATE_BITS,
+	PJ_MASK       = (1u << PJ_STATE_BITS) - 1
 };
 
 inline static
@@ -1023,8 +1023,8 @@ enum pj_parser_state pj_stack_get(const pjson_context *ctx, pj_usize index)
 	 * 1 SSSS SSSS  3 2
 	 *      ...
 	 */
-	pj_usize row = index / PJ_MAX_COLUMNS;
-	pj_usize col = index % PJ_MAX_COLUMNS;
+	pj_usize row = index / PJ_COLUMNS;
+	pj_usize col = index % PJ_COLUMNS;
 	return (enum pj_parser_state)((ctx->stack[row] >> (col * PJ_STATE_BITS))
 	                              & PJ_MASK);
 }
@@ -1034,8 +1034,8 @@ void pj_stack_set(pjson_context *ctx,
                   pj_usize index,
                   enum pj_parser_state state)
 {
-	pj_usize row = index / PJ_MAX_COLUMNS;
-	pj_usize col = index % PJ_MAX_COLUMNS;
+	pj_usize row = index / PJ_COLUMNS;
+	pj_usize col = index % PJ_COLUMNS;
 	unsigned char *restrict stack = ctx->stack;
 	stack[row] &= ~(PJ_MASK << (col * PJ_STATE_BITS));
 	stack[row] |= state << (col * PJ_STATE_BITS);
@@ -1046,12 +1046,12 @@ void pj_stack_set(pjson_context *ctx,
 
 inline static bool pj_stack_is_topped(const pjson_context *ctx, pj_usize top)
 {
-	return (top == 0) | (pj_ceil_div(top, PJ_MAX_COLUMNS) >= ctx->stack_size);
+	return (top == 0) | (pj_ceil_div(top, PJ_COLUMNS) >= ctx->stack_size);
 }
 
 inline static pj_usize pj_stack_used(const pjson_context *ctx)
 {
-	return pj_ceil_div(ctx->stack_top + 1, PJ_MAX_COLUMNS);
+	return pj_ceil_div(ctx->stack_top + 1, PJ_COLUMNS);
 }
 
 #else
@@ -1181,13 +1181,11 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
-		pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_AFTER);
 		lexer_res = pj_parse_value(ctx, lexer_res, top + 1);
-		if (pj_unlikely(lexer_res.status == PJSON_STATUS_ERROR)) {
-			/* Reset parser state in case of error. */
-			pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_LIST);
+		if (pj_unlikely(lexer_res.status == PJSON_STATUS_ERROR))
 			pj_stack_pop(ctx);
-		}
+		else
+			pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_AFTER);
 		return lexer_res;
 	case PJ_PARSER_STATE_ELEMENT_AFTER:
 		switch (lexer_res.event) {
@@ -1286,6 +1284,8 @@ PJSON_API void pjson_init(pjson_context *restrict ctx, pjson_block block)
 {
 	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
+	ctx->high       = 0;
+	ctx->low        = 0;
 	ctx->utf8_buf   = 0;
 	ctx->stack_size = block.size;
 	ctx->stack      = block.ptr;
@@ -1313,6 +1313,10 @@ PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
 	pj_nodefault
 	}
 
+	unsigned char lexer_state = ctx->lexer_state;
+	pjson_surrogate high = ctx->high;
+	pjson_surrogate low = ctx->low;
+
 	pjson_result lexer_res = pj_lexer_push(ctx, utf8_res.codepoint);
 	switch (lexer_res.status) {
 	case PJSON_STATUS_ACCEPT_RETRY:
@@ -1325,49 +1329,86 @@ PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
 		--(ctx->byte_count);
 		pj_fallthrough;
 	case PJSON_STATUS_ACCEPT:
-		return pj_parser_push(ctx, lexer_res);
+		break;
 
 	default:
 		return lexer_res;
 	}
+
+	pjson_result res = pj_parser_push(ctx, lexer_res);
+	if (pj_unlikely(res.status == PJSON_STATUS_ERROR)) {
+		if (lexer_res.status != PJSON_STATUS_ACCEPT_RETRY) {
+			ctx->utf8_state = utf8_state;
+			ctx->utf8_buf = utf8_buf;
+			--(ctx->byte_count);
+		}
+
+		/*
+		 * Also reset the lexer's state in case of error (e.g. might have
+		 * reached the stack limit).
+		 */
+		ctx->lexer_state = lexer_state;
+		ctx->high = high;
+		ctx->low = low;
+	}
+
+	return res;
 }
 
 PJSON_API pjson_result pjson_push_codepoint(pjson_context *ctx,
                                             pjson_codepoint codepoint)
 {
+	unsigned char lexer_state = ctx->lexer_state;
+	pjson_surrogate high = ctx->high;
+	pjson_surrogate low = ctx->low;
+
+	pjson_usize code_size;
 	pjson_result lexer_res = pj_lexer_push(ctx, codepoint);
 	switch (lexer_res.status) {
 	case PJSON_STATUS_ACCEPT:
-		ctx->byte_count += pj_utf8_code_size(codepoint);
-		pj_fallthrough;
+		code_size = pj_utf8_code_size(codepoint);
+		ctx->byte_count += code_size;
+		break;
 	case PJSON_STATUS_ACCEPT_RETRY:
-		return pj_parser_push(ctx, lexer_res);
+		code_size = 0;
+		break;
 	default:
 		return lexer_res;
 	}
+
+	pjson_result res = pj_parser_push(ctx, lexer_res);
+	if (pj_unlikely(res.status == PJSON_STATUS_ERROR)) {
+		ctx->lexer_state = lexer_state;
+		ctx->high = high;
+		ctx->low = low;
+		ctx->byte_count -= code_size;
+	}
+
+	return res;
 }
 
 PJSON_API enum pjson_state pjson_current_state(const pjson_context *ctx)
 {
 	static const unsigned char to_pub[] = {
-		[PJ_PARSER_STATE_WAIT_TOKEN]    = PJSON_STATE_NONE,     /* Not used. */
-		[PJ_PARSER_STATE_ELEMENT_LIST]  = PJSON_STATE_IN_ARRAY,
-		[PJ_PARSER_STATE_VALUE]         = PJSON_STATE_NONE,     /* Likewise. */
-		[PJ_PARSER_STATE_ELEMENT_AFTER] = PJSON_STATE_IN_ARRAY,
-		[PJ_PARSER_STATE_MEMBER_LIST]   = PJSON_STATE_IN_OBJECT,
-		[PJ_PARSER_STATE_MEMBER_STRING] = PJSON_STATE_IN_OBJECT,
-		[PJ_PARSER_STATE_MEMBER_COLON]  = PJSON_STATE_IN_KEY,
-		[PJ_PARSER_STATE_MEMBER_AFTER]  = PJSON_STATE_IN_OBJECT,
-		[PJ_PARSER_STATE_DONE]          = PJSON_STATE_NONE
+#		if 0
+		[PJ_PARSER_STATE_VALUE            ] = PJSON_STATE_NONE,
+		[PJ_PARSER_STATE_WAIT_TOKEN       ] = PJSON_STATE_NONE,
+#		endif
+		[PJ_PARSER_STATE_ELEMENT_LIST  - 2] = PJSON_STATE_IN_ARRAY,
+		[PJ_PARSER_STATE_ELEMENT_AFTER - 2] = PJSON_STATE_IN_ARRAY,
+		[PJ_PARSER_STATE_MEMBER_LIST   - 2] = PJSON_STATE_IN_OBJECT,
+		[PJ_PARSER_STATE_MEMBER_STRING - 2] = PJSON_STATE_IN_OBJECT,
+		[PJ_PARSER_STATE_MEMBER_COLON  - 2] = PJSON_STATE_IN_KEY,
+		[PJ_PARSER_STATE_MEMBER_AFTER  - 2] = PJSON_STATE_IN_OBJECT,
+		[PJ_PARSER_STATE_DONE          - 2] = PJSON_STATE_NONE
 	};
+
 	pjson_usize top = ctx->stack_top;
 	enum pj_parser_state top_val = pj_stack_get(ctx, top);
-	return (enum pjson_state)(
-		top_val == PJ_PARSER_STATE_WAIT_TOKEN
-		|| top_val == PJ_PARSER_STATE_VALUE
-			? to_pub[pj_stack_get(ctx, top - 1)]
-			: to_pub[top_val]
-	);
+	if (top_val <= PJ_PARSER_STATE_WAIT_TOKEN)
+		top_val = pj_stack_get(ctx, top - 1);
+
+	return (enum pjson_state)to_pub[top_val - 2];
 }
 
 PJSON_API void pjson_resize(pjson_context *restrict ctx, pjson_block block)
