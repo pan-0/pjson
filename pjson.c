@@ -1284,8 +1284,6 @@ PJSON_API void pjson_init(pjson_context *restrict ctx, pjson_block block)
 {
 	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
-	ctx->high       = 0;
-	ctx->low        = 0;
 	ctx->utf8_buf   = 0;
 	ctx->stack_size = block.size;
 	ctx->stack      = block.ptr;
@@ -1314,9 +1312,6 @@ PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
 	}
 
 	unsigned char lexer_state = ctx->lexer_state;
-	pjson_surrogate high = ctx->high;
-	pjson_surrogate low = ctx->low;
-
 	pjson_result lexer_res = pj_lexer_push(ctx, utf8_res.codepoint);
 	switch (lexer_res.status) {
 	case PJSON_STATUS_ACCEPT_RETRY:
@@ -1348,8 +1343,6 @@ PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
 		 * reached the stack limit).
 		 */
 		ctx->lexer_state = lexer_state;
-		ctx->high = high;
-		ctx->low = low;
 	}
 
 	return res;
@@ -1359,8 +1352,6 @@ PJSON_API pjson_result pjson_push_codepoint(pjson_context *ctx,
                                             pjson_codepoint codepoint)
 {
 	unsigned char lexer_state = ctx->lexer_state;
-	pjson_surrogate high = ctx->high;
-	pjson_surrogate low = ctx->low;
 
 	pjson_usize code_size;
 	pjson_result lexer_res = pj_lexer_push(ctx, codepoint);
@@ -1379,8 +1370,6 @@ PJSON_API pjson_result pjson_push_codepoint(pjson_context *ctx,
 	pjson_result res = pj_parser_push(ctx, lexer_res);
 	if (pj_unlikely(res.status == PJSON_STATUS_ERROR)) {
 		ctx->lexer_state = lexer_state;
-		ctx->high = high;
-		ctx->low = low;
 		ctx->byte_count -= code_size;
 	}
 
