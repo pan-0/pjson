@@ -676,7 +676,7 @@ static value *parse(usize size,
 {
 	enum { stack_len = 128 };
 
-	entry *stack = lina_alloc(lin, stack_len * sizeof(*stack), alignof(stack));
+	entry *stack = lina_alloc(lin, stack_len * sizeof(*stack), alignof(entry));
 	if (unlikely(stack == NULL))
 		return NULL;
 
