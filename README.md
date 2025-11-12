@@ -1,7 +1,7 @@
 <!-- Copyright 2025, pan (pan_@disroot.org) -->
 <!-- SPDX-License-Identifier: MIT-0 OR Apache-2.0 -->
 
-Barebones JSON push parser for C99.
+# pjson: Bare-bones JSON push parser for C99
 
 The goal is a small, freestanding implementation that handles the most tedious parts of the specification (i.e. RFC 8259). Other goals were correctness and simplicity (it should be obvious what the parser does just from looking at the code).
 
