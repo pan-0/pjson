@@ -1,0 +1,8 @@
+SPDXVersion: SPDX-2.1
+DataLicense: CC0-1.0
+Creator: Person: pan (pan_@disroot.org)
+PackageName: pjson
+PackageOriginator: Person: pan (pan_@disroot.org)
+PackageVersion: 0.1.0
+PackageHomePage: https://github.com/pan-0/pjson
+PackageLicenseDeclared: MIT-0 OR Apache-2.0
