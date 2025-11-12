@@ -1,5 +1,6 @@
 <!-- Copyright 2025, pan (pan_@disroot.org) -->
-<!-- SPDX-License-Identifier: MIT-0 -->
+<!-- SPDX-License-Identifier: MIT-0 OR Apache-2.0 -->
+
 Barebones JSON push parser for C99.
 
 The goal is a small, freestanding implementation that handles the most tedious parts of the specification (i.e. RFC 8259). Other goals were correctness and simplicity (it should be obvious what the parser does just from looking at the code).
@@ -58,29 +59,14 @@ valid:
 ```
 
 # Documentation
-
 TODO
 
 Until then, hopefully, [`pjson.h`](./pjson.h) and the programs in [`examples/`](./examples) clear up any confusion.
 
 # LICENSE
+This work is dual-licensed under the MIT No Attribution ("MIT-0") and Apache License 2.0 ("Apache-2.0") licenses.
+You can choose between one of them if you use this work.
+
 ```
-MIT No Attribution
-
-Copyright 2025 pan <pan_@disroot.org>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+SPDX-License-Identifier: MIT-0 OR Apache-2.0
 ```

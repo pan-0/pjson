@@ -1,5 +1,5 @@
 /* Copyright 2025, pan (pan_@disroot.org) */
-/* SPDX-License-Identifier: MIT-0 */
+/* SPDX-License-Identifier: MIT-0 OR Apache-2.0 */
 
 /*
  * This example, albeit contrived, demonstrates how one could go about creating
