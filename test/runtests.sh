@@ -2,7 +2,7 @@
 # Copyright 2025, pan (pan_@disroot.org)
 # SPDX-License-Identifier: MIT-0 OR Apache-2.0
 
-export ASAN_OPTIONS='detect_invalid_pointers_pairs=2:print_stacktrace=1:halt_on_error=1'
+export ASAN_OPTIONS='detect_invalid_pointer_pairs=2:print_stacktrace=1:halt_on_error=1'
 export UBSAN_OPTIONS='print_stacktrace=1:halt_on_error=1'
 
 alias pj='./pj -s0'
