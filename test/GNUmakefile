@@ -23,6 +23,8 @@ CFLAGS ::= \
 	-Wno-missing-field-initializers
 CPPFLAGS ::= -I..
 
+RUNTESTS ::= runtests.sh
+
 VPATH ::= ..
 
 all: pj
@@ -31,11 +33,11 @@ all: pj
 pj: pj.c pjson.c pjson.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $< -o $@
 
-sh_check: runtests.sh
-	@shellcheck $<
+sh_check: runtests.sh partests.sh
+	@shellcheck $^
 .PHONY: sh_check
 
-tests: runtests.sh pj
+tests: $(RUNTESTS) pj
 	@!(./$< | tee /dev/stderr | grep 'FAIL' >/dev/null)
 .PHONY: tests
 

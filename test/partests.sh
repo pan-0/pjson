@@ -1,11 +1,13 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2025, pan (pan_@disroot.org)
 # SPDX-License-Identifier: MIT-0 OR Apache-2.0
 
 export ASAN_OPTIONS='detect_invalid_pointer_pairs=2:print_stacktrace=1:halt_on_error=1'
 export UBSAN_OPTIONS='print_stacktrace=1:halt_on_error=1'
 
-alias pj='./pj -s0'
+PATH=".:$PATH"
+
+alias pj='pj -s0'
 
 # Print which test files were skipped, i.e. those that start with an
 # underscore ('_').
@@ -28,6 +30,8 @@ expect ()
 	fi
 }
 
+export -f expect
+
 # JSONTestSuite.
 #
 # nst_tests(dir: Path)
@@ -40,13 +44,8 @@ nst_tests ()
 		printf '%-70s: IMPL: got %s\n' "$file" "$?"
 	done
 
-	for file in "$1"/n_*.json; do
-		expect 1 "$file"
-	done
-
-	for file in "$1"/y_*.json; do
-		expect 0 "$file"
-	done
+	find "$1" -name 'n_*.json' | parallel 'expect 1'
+	find "$1" -name 'y_*.json' | parallel 'expect 0'
 }
 
 # JSON_checker.
@@ -56,13 +55,8 @@ jsc_tests ()
 {
 	skip "$1"
 
-	for file in "$1"/fail*.json; do
-		expect 1 "$file"
-	done
-
-	for file in "$1"/pass*.json; do
-		expect 0 "$file"
-	done
+	find "$1" -name 'fail*.json' | parallel 'expect 1'
+	find "$1" -name 'pass*.json' | parallel 'expect 0'
 }
 
 main ()
