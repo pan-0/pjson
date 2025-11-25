@@ -13,7 +13,8 @@ As mentioned, this implements RFC 8259 and _only it_. Only UTF-8 is supported. N
 
 If you're looking for a library that handles all those issues, offers better performance and probably has a nicer API, something else like `yyjson` is recommended.
 
-# Basic validator example
+## Basic validator example
+
 ```c
 #include "pjson.h"
 #include <assert.h>   /* assert() */
@@ -58,12 +59,14 @@ valid:
 }
 ```
 
-# Documentation
+## Documentation
+
 TODO
 
 Until then, hopefully, [`pjson.h`](./pjson.h) and the programs in [`examples/`](./examples) clear up any confusion.
 
-# LICENSE
+## LICENSE
+
 This work is dual-licensed under the MIT No Attribution ("MIT-0") and Apache License 2.0 ("Apache-2.0") licenses.
 You can choose between one of them if you use this work.
 
