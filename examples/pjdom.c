@@ -375,7 +375,7 @@ allocalign(2) inline static void *list_first(const list *lst, usize alignment)
 {
 	list_node *begin = list_begin(lst);
 	assert(begin != NULL);
-	return blnext(begin, sizeof(begin), alignment);
+	return blnext(begin, sizeof(*begin), alignment);
 }
 
 allocalign(2) inline static void *list_last(const list *lst, usize alignment)
