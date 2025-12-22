@@ -73,7 +73,8 @@
 #endif
 
 /* ALIGNMENT */
-#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 201112L  /* atleast C11 */
+#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 201112L /* atleast C11 */ \
+		&& !defined _MSC_VER  /* Microsoft shenanigans. */
 #	define ALIGNMENT alignof(max_align_t)
 #else
 #	define ALIGNMENT alignof(long double)
@@ -85,7 +86,7 @@ typedef size_t usize;
 /*
  * BLayout.
  *
- * See <https://github.com/pan-0/BLayout>.
+ * See <https://github.com/napcakes/BLayout>.
  */
 
 struct blayout {
@@ -386,32 +387,6 @@ allocalign(2) inline static void *list_last(const list *lst, usize alignment)
 
 #define list_value(T, node) ((T *) blnext((node), sizeof(*(node)), alignof(T)))
 
-#define list_for_at(T, lst, begin, ...)  \
-    do {                                 \
-        list_node *tail = (lst)->tail;   \
-        assert(tail != NULL);            \
-        list_node *node = (begin);       \
-        do {                             \
-            node = node->next;           \
-            T *it = list_value(T, node); \
-            __VA_ARGS__;                 \
-        } while (node != tail);          \
-    } while (0)
-
-#define list_for(T, lst, ...)            \
-    do {                                 \
-        list_node *tail = (lst)->tail;   \
-        if (unlikely(tail == NULL))      \
-            break;                       \
-                                         \
-        list_node *node = tail;          \
-        do {                             \
-            node = node->next;           \
-            T *it = list_value(T, node); \
-            __VA_ARGS__;                 \
-        } while (node != tail);          \
-    } while (0)
-
 
 /*
  * Byte array.
@@ -585,7 +560,7 @@ typedef struct object object;
 typedef struct array  array;
 
 enum value_kind {
-	/* Reserved. */
+	/* Reserved = 0u, */
 	VALUE_FALSE = 1u,
 	VALUE_TRUE,
 	VALUE_NULL,
@@ -605,8 +580,7 @@ typedef struct {
 		double  fnum;
 		integer inum;
 		void    *str;
-		list    array;   /* Of `value`. */
-		list    object;  /* Of `member`. */
+		list    items;  /* Either a `list<value>` or `list<member>`. */
 	} u;
 } value;
 
@@ -620,11 +594,20 @@ typedef struct {
 	value  val;
 } member;
 
+#define items_iter(T, lst, begin, ...)                         \
+    do {                                                       \
+        const list_node *tail = (lst)->tail;                   \
+        assert(tail != NULL);                                  \
+        for (list_node *node = (begin); ; node = node->next) { \
+            T *it = list_value(T, node);                       \
+            __VA_ARGS__;                                       \
+            if (node == tail)                                  \
+                break;                                         \
+        }                                                      \
+    } while (false)
+
 static const struct blayout value_lay  = {1, sizeof(value),  alignof(value)},
                             member_lay = {1, sizeof(member), alignof(member)};
-
-#define array_list(list_func, ...)  list_func(value,  __VA_ARGS__)
-#define object_list(list_func, ...) list_func(member, __VA_ARGS__)
 
 inline static value_tag tag_with_length(enum value_kind kind, usize len)
 {
@@ -685,6 +668,7 @@ static value *parse(usize size,
 		return NULL;
 
 	memset(parser_stack, 0, stack_len);
+
 	pjson_context ctx;
 	pjson_init(&ctx, (pjson_block){stack_len, parser_stack});
 
@@ -730,36 +714,24 @@ static value *parse(usize size,
 				break;
 
 			case PJSON_EVENT_END_ARRAY:
-				{
-					entry array = *top;
-					--top;
-					value *val = push(&ctx, top, lin);
-					if (unlikely(val == NULL))
-						return NULL;
-
-					value_tag tag = tag_with_length(VALUE_ARRAY, array.len);
-					if (unlikely(tag == 0))
-						return NULL;
-
-					val->tag = tag;
-					val->u.array = array.lst;
-				}
-				break;
-
 			case PJSON_EVENT_END_OBJECT:
 				{
-					entry object = *top;
+					entry items = *top;
 					--top;
 					value *val = push(&ctx, top, lin);
 					if (unlikely(val == NULL))
 						return NULL;
 
-					value_tag tag = tag_with_length(VALUE_OBJECT, object.len);
+					enum value_kind kind = (res.event == PJSON_EVENT_END_ARRAY
+						? VALUE_ARRAY
+						: VALUE_OBJECT
+					);
+					value_tag tag = tag_with_length(kind, items.len);
 					if (unlikely(tag == 0))
 						return NULL;
 
 					val->tag = tag;
-					val->u.object = object.lst;
+					val->u.items = items.lst;
 				}
 				break;
 
@@ -773,6 +745,7 @@ static value *parse(usize size,
 
 					break;
 				}
+				/* FIXME: We actually assume ASCII here for '0'-'9'. */
 				fallthrough;
 			case PJSON_EVENT_STRING_CODE:
 				if (bytearray_push_n(&codes,
@@ -809,7 +782,7 @@ static value *parse(usize size,
 				break;
 
 			case PJSON_EVENT_END_NUMBER_FLOAT:
-				if (bytearray_push_n(&codes, 1, &bytearray_sentinel, lin))
+				if (bytearray_push_n(&codes, 1, &(char){'\0'}, lin))
 					return NULL;
 
 				{
@@ -826,7 +799,7 @@ static value *parse(usize size,
 				break;
 
 			case PJSON_EVENT_END_NUMBER_INTEGER:
-				if (bytearray_push_n(&codes, 1, &bytearray_sentinel, lin))
+				if (bytearray_push_n(&codes, 1, &(char){'\0'}, lin))
 					return NULL;
 
 				{
@@ -1004,7 +977,7 @@ static void print_value(const value *val, unsigned nest)
 		case 1:
 			putchar('[');
 			{
-				list array = val->u.array;
+				list array = val->u.items;
 				list_node *begin = list_begin(&array);
 
 				print_value(list_value(value, begin), nest);
@@ -1013,13 +986,13 @@ static void print_value(const value *val, unsigned nest)
 		default:
 			printf("[\n");
 			{
-				list array = val->u.array;
+				list array = val->u.items;
 				list_node *begin = list_begin(&array);
 
 				print_indent(nest + 1);
 				print_value(list_value(value, begin), nest + 1);
 
-				array_list(list_for_at, &array, begin, {
+				items_iter(value, &array, begin->next, {
 					printf(",\n");
 					print_indent(nest + 1);
 					print_value(it, nest + 1);
@@ -1040,24 +1013,22 @@ static void print_value(const value *val, unsigned nest)
 		case 1:
 			putchar('{');
 			{
-				list array = val->u.array;
-				list_node *begin = list_begin(&array);
+				list object = val->u.items;
+				list_node *begin = list_begin(&object);
 
-				member *mem = list_value(member, begin);
-				print_member(mem, nest);
+				print_member(list_value(member, begin), nest);
 			}
 			break;
 		default:
 			printf("{\n");
 			{
-				list object = val->u.object;
+				list object = val->u.items;
 				list_node *begin = list_begin(&object);
 
-				member *mem = list_value(member, begin);
 				print_indent(nest + 1);
-				print_member(mem, nest + 1);
+				print_member(list_value(member, begin), nest + 1);
 
-				object_list(list_for_at, &object, begin, {
+				items_iter(member, &object, begin->next, {
 					printf(",\n");
 					print_indent(nest + 1);
 					print_member(it, nest + 1);
