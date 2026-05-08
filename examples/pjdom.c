@@ -33,22 +33,22 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #if defined __GNUC__
-#	define likely(x)     __builtin_expect(!!(x), 1)
-#	define unlikely(x)   __builtin_expect(!!(x), 0)
+#	define likely(x)     (__builtin_expect(!!(x), 1))
+#	define unlikely(x)   (__builtin_expect(!!(x), 0))
 #	define inline_never  __attribute__((__noinline__))
 #	define inline_always __attribute__((__always_inline__)) inline
 #	define allocalign(x) __attribute__((__alloc_align__(x)))
 #	define fallthrough   __attribute__((__fallthrough__))
 #elif defined _MSC_VER
-#	define likely(x)     (x)
-#	define unlikely(x)   (x)
+#	define likely
+#	define unlikely
 #	define inline_never  __declspec(noinline)
 #	define inline_always __forceinline
 #	define allocalign(x)
 #	define fallthrough
 #else
-#	define likely(x)     (x)
-#	define unlikely(x)   (x)
+#	define likely
+#	define unlikely
 #	define inline_never
 #	define inline_always inline
 #	define allocalign(x)
@@ -95,11 +95,13 @@ struct blayout {
 	usize alignment;
 };
 
-inline static usize blcalc(usize alignment,
-                           ptrdiff_t offs,
-                           usize n,
-                           const struct blayout *lays,
-                           usize prev_size)
+inline
+static usize
+blcalc(usize alignment,
+       ptrdiff_t offs,
+       usize n,
+       const struct blayout *lays,
+       usize prev_size)
 {
 	usize i;
 	usize base = alignment + (usize)offs;
@@ -130,8 +132,9 @@ inline static usize blcalc(usize alignment,
 	return pos - base;
 }
 
-allocalign(3)
-inline static void *blnext(void *ptr, usize curr_size, usize next_align)
+inline allocalign(3)
+static void *
+blnext(void *ptr, usize curr_size, usize next_align)
 {
 	ptr = (char *)ptr + curr_size;
 	return (char *)ptr + (usize)(~((uintptr_t)ptr - 1) & (next_align - 1));
@@ -158,28 +161,37 @@ static const lina_node lina_sentinel = {.prev=(lina_node *)&lina_sentinel,
                                         .pos =(void *)&lina_sentinel,
                                         .end =(void *)&lina_sentinel};
 
-inline static usize lina_node_padding(const lina_node *node, usize alignment)
+inline
+static usize
+lina_node_padding(const lina_node *node, usize alignment)
 {
 	return ~((uintptr_t)node->pos - 1) & (alignment - 1);
 }
 
-inline static usize lina_node_avail(const lina_node *node)
+inline
+static usize
+lina_node_avail(const lina_node *node)
 {
 	return (usize)((char *)node->end - (char *)node->pos);
 }
 
-inline static void *lina_node_begin(const lina_node *node)
+inline
+static void *
+lina_node_begin(const lina_node *node)
 {
 	return (char *)node + sizeof(*node);
 }
 
-inline static usize lina_node_offset(const lina_node *node)
+inline
+static usize
+lina_node_offset(const lina_node *node)
 {
 	return (usize)((char *)node->pos - (char *)lina_node_begin(node));
 }
 
-allocalign(3) inline_never
-static void *lina_alloc_slow(lina *lin, usize size, usize alignment)
+inline_never allocalign(3)
+static void *
+lina_alloc_slow(lina *lin, usize size, usize alignment)
 {
 	void *ptr;
 
@@ -198,7 +210,7 @@ static void *lina_alloc_slow(lina *lin, usize size, usize alignment)
 			{1, size, alignment}
 		};
 		usize min_size = blcalc(ALIGNMENT, 0, 2, lays, 0);
-		if (unlikely(min_size == 0))
+		if unlikely (min_size == 0)
 			return NULL;
 
 		/* Align up to the desired node size. */
@@ -207,7 +219,7 @@ static void *lina_alloc_slow(lina *lin, usize size, usize alignment)
 			block_size = min_size;
 
 		node = malloc(block_size);
-		if (unlikely(node == NULL))
+		if unlikely (node == NULL)
 			return NULL;
 
 		char *begin = lina_node_begin(node);
@@ -226,13 +238,14 @@ static void *lina_alloc_slow(lina *lin, usize size, usize alignment)
 	return ptr;
 }
 
-allocalign(3)
-inline_always static void *lina_alloc(lina *lin, usize size, usize alignment)
+inline_always allocalign(3)
+static void *
+lina_alloc(lina *lin, usize size, usize alignment)
 {
 	lina_node *curr = lin->curr;
 	usize padding = lina_node_padding(curr, alignment);
 	usize padded_size = padding + size;
-	if (unlikely(padded_size < size || lina_node_avail(curr) < padded_size))
+	if unlikely (padded_size < size || lina_node_avail(curr) < padded_size)
 		return lina_alloc_slow(lin, size, alignment);
 
 	void *ptr = (char *)curr->pos + padding;
@@ -240,71 +253,73 @@ inline_always static void *lina_alloc(lina *lin, usize size, usize alignment)
 	return ptr;
 }
 
-allocalign(5) inline_never static void *lina_grow_slow(lina *lin,
-                                                       void *ptr,
-                                                       usize size,
-                                                       usize new_size,
-                                                       usize alignment)
+inline_never allocalign(5)
+static void *
+lina_grow_slow(lina *lin,
+               void *ptr,
+               usize size,
+               usize new_size,
+               usize alignment)
 {
 	void *new_ptr = lina_alloc_slow(lin, new_size, alignment);
-	if (unlikely(new_ptr == NULL))
+	if unlikely (new_ptr == NULL)
 		return NULL;
 
 	return memcpy(new_ptr, ptr, size);
 }
 
-allocalign(5) inline static void *lina_grow(lina *lin,
-                                            void *ptr,
-                                            usize size,
-                                            usize new_size,
-                                            usize alignment)
+inline allocalign(5)
+static void *
+lina_grow(lina *lin, void *ptr, usize size, usize new_size, usize alignment)
 {
 	assert(new_size > size);
 
 	lina_node *curr = lin->curr;
 	void *pos = curr->pos;
-	if (unlikely(size > lina_node_offset(curr) || ptr != (char *)pos - size))
+	if unlikely (size > lina_node_offset(curr) || ptr != (char *)pos - size)
 		return lina_grow_slow(lin, ptr, size, new_size, alignment);
 
 	usize delta = new_size - size;
-	if (unlikely(lina_node_avail(curr) < delta))
+	if unlikely (lina_node_avail(curr) < delta)
 		return lina_grow_slow(lin, ptr, size, new_size, alignment);
 
 	curr->pos = (char *)pos + delta;
 	return ptr;
 }
 
-inline static void lina_shrink(lina *lin,
-                               void *ptr,
-                               usize size,
-                               usize new_size,
-                               usize alignment)
+inline
+static void
+lina_shrink(lina *lin, void *ptr, usize size, usize new_size, usize alignment)
 {
 	assert(size > new_size);
 	(void)alignment;
 
 	lina_node *curr = lin->curr;
 	void *pos = curr->pos;
-	if (unlikely(size > lina_node_offset(curr) || ptr != (char *)pos - size))
+	if unlikely (size > lina_node_offset(curr) || ptr != (char *)pos - size)
 		return;
 
 	curr->pos = (char *)ptr + new_size;
 }
 
 inline
-static void lina_dealloc(lina *lin, void *ptr, usize size, usize alignment)
+static void
+lina_dealloc(lina *lin, void *ptr, usize size, usize alignment)
 {
 	lina_shrink(lin, ptr, size, 0, alignment);
 }
 
-inline static lina lina_new(usize size)
+inline
+static lina
+lina_new(usize size)
 {
 	return (lina){(lina_node *)&lina_sentinel,
 	              (lina_node *)&lina_sentinel,
 	              size};
 }
 
-static void lina_fini(lina *lin)
+static void
+lina_fini(lina *lin)
 {
 	lina_node *node = lin->head;
 	while (node != &lina_sentinel) {
@@ -333,27 +348,31 @@ typedef struct {
 	list_node *tail;
 } list;
 
-inline static list list_new(void)
+inline
+static list
+list_new(void)
 {
 	return (list){NULL};
 }
 
-inline static void *list_push(list *lst, struct blayout elem_lay, lina *lin)
+inline
+static void *
+list_push(list *lst, struct blayout elem_lay, lina *lin)
 {
 	const struct blayout lays[] = {
 		{1, sizeof(list_node), alignof(list_node)},
 		elem_lay
 	};
 	usize size = blcalc(alignof(list_node), 0, 2, lays, 0);
-	if (unlikely(size == 0))
+	if unlikely (size == 0)
 		return NULL;
 
 	list_node *node = lina_alloc(lin, size, alignof(list_node));
-	if (unlikely(node == NULL))
+	if unlikely (node == NULL)
 		return NULL;
 
 	list_node *tail = lst->tail;
-	if (unlikely(tail == NULL)) {
+	if unlikely (tail == NULL) {
 		node->next = node;
 	}
 	else {
@@ -364,21 +383,27 @@ inline static void *list_push(list *lst, struct blayout elem_lay, lina *lin)
 	return blnext(node, sizeof(*node), elem_lay.alignment);
 }
 
-inline static list_node *list_begin(const list *lst)
+inline
+static list_node *
+list_begin(const list *lst)
 {
 	list_node *tail = lst->tail;
 	assert(tail != NULL);
 	return tail->next;
 }
 
-allocalign(2) inline static void *list_first(const list *lst, usize alignment)
+inline allocalign(2)
+static void *
+list_first(const list *lst, usize alignment)
 {
 	list_node *begin = list_begin(lst);
 	assert(begin != NULL);
 	return blnext(begin, sizeof(*begin), alignment);
 }
 
-allocalign(2) inline static void *list_last(const list *lst, usize alignment)
+inline allocalign(2)
+static void *
+list_last(const list *lst, usize alignment)
 {
 	list_node *tail = lst->tail;
 	assert(tail != NULL);
@@ -400,28 +425,33 @@ typedef struct {
 
 static const unsigned char bytearray_sentinel = 0;
 
-inline static usize bytearray_avail(const bytearray *ba)
+inline
+static usize
+bytearray_avail(const bytearray *ba)
 {
 	return (usize)(ba->lim - ba->end);
 }
 
-inline static usize bytearray_capacity(const bytearray *ba)
+inline
+static usize
+bytearray_capacity(const bytearray *ba)
 {
 	return (usize)(ba->lim - ba->buf);
 }
 
-inline static usize bytearray_size(const bytearray *ba)
+inline
+static usize
+bytearray_size(const bytearray *ba)
 {
 	return (usize)(ba->end - ba->buf);
 }
 
-inline_never static bool bytearray_push_n_slow(bytearray *ba,
-                                               usize n,
-                                               const void *bytes,
-                                               lina *lin)
+inline_never
+static bool
+bytearray_push_n_slow(bytearray *ba, usize n, const void *bytes, lina *lin)
 {
 	usize cap = bytearray_capacity(ba);
-	if (unlikely(cap == SIZE_MAX))
+	if unlikely (cap == SIZE_MAX)
 		return true;
 
 	usize avail = bytearray_avail(ba);
@@ -448,12 +478,12 @@ inline_never static bool bytearray_push_n_slow(bytearray *ba,
 
 	unsigned char *restrict new_buf;
 	unsigned char *restrict buf = ba->buf;
-	if (unlikely(buf == &bytearray_sentinel))
+	if unlikely (buf == &bytearray_sentinel)
 		new_buf = lina_alloc(lin, new_cap, 1);
 	else
 		new_buf = lina_grow(lin, buf, cap, new_cap, 1);
 
-	if (unlikely(new_buf == NULL))
+	if unlikely (new_buf == NULL)
 		return true;
 
 	unsigned char *restrict end = new_buf + size;
@@ -465,8 +495,9 @@ inline_never static bool bytearray_push_n_slow(bytearray *ba,
 	return false;
 }
 
-inline static
-bool bytearray_push_n(bytearray *ba, usize n, const void *bytes, lina *lin)
+inline
+static bool
+bytearray_push_n(bytearray *ba, usize n, const void *bytes, lina *lin)
 {
 	assert(n != 0);
 
@@ -478,7 +509,8 @@ bool bytearray_push_n(bytearray *ba, usize n, const void *bytes, lina *lin)
 	return false;
 }
 
-static void bytearray_shrink(bytearray *ba, lina *lin)
+static void
+bytearray_shrink(bytearray *ba, lina *lin)
 {
 	if (ba->end != ba->lim) {
 		usize cap  = bytearray_capacity(ba);
@@ -488,12 +520,15 @@ static void bytearray_shrink(bytearray *ba, lina *lin)
 	}
 }
 
-static void bytearray_fini(bytearray *ba, lina *lin)
+static void
+bytearray_fini(bytearray *ba, lina *lin)
 {
 	lina_dealloc(lin, ba->buf, bytearray_capacity(ba), 1);
 }
 
-inline static bytearray bytearray_new(void)
+inline
+static bytearray
+bytearray_new(void)
 {
 	return (bytearray){(unsigned char *)&bytearray_sentinel,
 	                   (unsigned char *)&bytearray_sentinel,
@@ -515,14 +550,16 @@ typedef struct {
 	double val;
 } atod_res;
 
-static int errno_helper(int ne)
+static int
+errno_helper(int ne)
 {
 	int e = errno;
 	errno = (ne <= 0 ? 0 : ne);
 	return e;
 }
 
-static atoll_res atollx(const void *str)
+static atoll_res
+atollx(const void *str)
 {
 	int err = errno_helper(0);
 	char *endptr;
@@ -534,7 +571,8 @@ static atoll_res atollx(const void *str)
 	return (atoll_res){.err=false, .val=val};
 }
 
-static atod_res atod(const void *str)
+static atod_res
+atod(const void *str)
 {
 	int err = errno_helper(0);
 	char *endptr;
@@ -609,25 +647,33 @@ typedef struct {
 static const struct blayout value_lay  = {1, sizeof(value),  alignof(value)},
                             member_lay = {1, sizeof(member), alignof(member)};
 
-inline static value_tag tag_with_length(enum value_kind kind, usize len)
+inline
+static value_tag
+tag_with_length(enum value_kind kind, usize len)
 {
-	if (unlikely(len > ((value_tag)-1 >> 8)))
+	if unlikely (len > ((value_tag)-1 >> 8))
 		return 0;
 
 	return ((value_tag)len << 8) | kind;
 }
 
-inline static enum value_kind value_kind(value_tag tag)
+inline
+static enum value_kind
+value_kind(value_tag tag)
 {
 	return (enum value_kind)(tag & 0xFF);
 }
 
-inline static usize value_length(value_tag tag)
+inline
+static usize
+value_length(value_tag tag)
 {
 	return (usize)(tag >> 8);
 }
 
-inline static string value_to_string(value val)
+inline
+static string
+value_to_string(value val)
 {
 	assert(value_kind(val.tag) == VALUE_STRING);
 	return (string){value_length(val.tag), val.u.str};
@@ -638,7 +684,9 @@ typedef struct {
 	usize len;
 } entry;
 
-inline static value *push(const pjson_context *ctx, entry *top, lina *lin)
+inline
+static value *
+push(const pjson_context *ctx, entry *top, lina *lin)
 {
 	++(top->len);
 
@@ -651,20 +699,21 @@ inline static value *push(const pjson_context *ctx, entry *top, lina *lin)
 	return list_push(&top->lst, value_lay, lin);
 }
 
-static value *parse(usize size,
-                    const void *buf,
-                    usize dec_point_len,
-                    const void *dec_point,
-                    lina *lin)
+static value *
+parse(usize size,
+      const void *buf,
+      usize dec_point_len,
+      const void *dec_point,
+      lina *lin)
 {
 	enum { stack_len = 128 };
 
 	entry *stack = lina_alloc(lin, stack_len * sizeof(*stack), alignof(entry));
-	if (unlikely(stack == NULL))
+	if unlikely (stack == NULL)
 		return NULL;
 
 	unsigned char *restrict parser_stack = lina_alloc(lin, stack_len, 1);
-	if (unlikely(parser_stack == NULL))
+	if unlikely (parser_stack == NULL)
 		return NULL;
 
 	memset(parser_stack, 0, stack_len);
@@ -697,7 +746,7 @@ static value *parse(usize size,
 						[PJSON_EVENT_FALSE] = VALUE_FALSE
 					};
 					value *val = push(&ctx, top, lin);
-					if (unlikely(val == NULL))
+					if unlikely (val == NULL)
 						return NULL;
 
 					val->tag = (enum value_kind)to_kind[res.event];
@@ -707,7 +756,7 @@ static value *parse(usize size,
 			case PJSON_EVENT_BEGIN_OBJECT:
 			case PJSON_EVENT_BEGIN_ARRAY:
 				++top;
-				if (unlikely(top == stack + stack_len))
+				if unlikely (top == stack + stack_len)
 					return NULL;
 
 				*top = (entry){list_new(), 0};
@@ -719,7 +768,7 @@ static value *parse(usize size,
 					entry items = *top;
 					--top;
 					value *val = push(&ctx, top, lin);
-					if (unlikely(val == NULL))
+					if unlikely (val == NULL)
 						return NULL;
 
 					enum value_kind kind = (res.event == PJSON_EVENT_END_ARRAY
@@ -727,7 +776,7 @@ static value *parse(usize size,
 						: VALUE_OBJECT
 					);
 					value_tag tag = tag_with_length(kind, items.len);
-					if (unlikely(tag == 0))
+					if unlikely (tag == 0)
 						return NULL;
 
 					val->tag = tag;
@@ -760,19 +809,19 @@ static value *parse(usize size,
 				bytearray_shrink(&codes, lin);
 				if (pjson_current_state(&ctx) == PJSON_STATE_IN_KEY) {
 					member *mem = list_push(&top->lst, member_lay, lin);
-					if (unlikely(mem == NULL))
+					if unlikely (mem == NULL)
 						return NULL;
 
 					mem->key = (string){bytearray_size(&codes), codes.buf};
 				}
 				else {
 					value *val = push(&ctx, top, lin);
-					if (unlikely(val == NULL))
+					if unlikely (val == NULL)
 						return NULL;
 
 					value_tag tag = tag_with_length(VALUE_STRING,
 					                                bytearray_size(&codes));
-					if (unlikely(tag == 0))
+					if unlikely (tag == 0)
 						return NULL;
 
 					val->tag = tag;
@@ -787,7 +836,7 @@ static value *parse(usize size,
 
 				{
 					atod_res r = atod(codes.buf);
-					if (unlikely(r.err))
+					if unlikely (r.err)
 						return NULL;
 
 					bytearray_fini(&codes, lin);
@@ -804,7 +853,7 @@ static value *parse(usize size,
 
 				{
 					atoll_res r = atollx(codes.buf);
-					if (unlikely(r.err))
+					if unlikely (r.err)
 						return NULL;
 
 					bytearray_fini(&codes, lin);
@@ -869,7 +918,8 @@ typedef struct {
 	void *data;
 } filebuffer;
 
-static filebuffer fload(FILE *f)
+static filebuffer
+fload(FILE *f)
 {
 	enum { chunksize = 32 * 1024 };
 
@@ -878,17 +928,17 @@ static filebuffer fload(FILE *f)
 	do {
 		usize size = buf.size;
 		usize new_size = size + chunksize;
-		if (unlikely(new_size < buf.size))
+		if unlikely (new_size < buf.size)
 			goto err;
 
 		void *new_data = realloc(buf.data, new_size);
-		if (unlikely(new_data == NULL))
+		if unlikely (new_data == NULL)
 			goto err;
 
 		buf.size = new_size;
 		buf.data = new_data;
 		read = fread((char *)buf.data + size, 1, chunksize, f);
-		if (unlikely(ferror(f)))
+		if unlikely (ferror(f))
 			goto err;
 	} while (read == chunksize);
 
@@ -903,7 +953,8 @@ err:
 	return (filebuffer){0};
 }
 
-static void print_indent(unsigned level)
+static void
+print_indent(unsigned level)
 {
 	while (level > 0) {
 		putchar('\t');
@@ -911,7 +962,8 @@ static void print_indent(unsigned level)
 	}
 }
 
-static void print_string(string str)
+static void
+print_string(string str)
 {
 	putchar('"');
 	for (usize i = 0; i < str.size; ++i) {
@@ -933,16 +985,19 @@ static void print_string(string str)
 	putchar('"');
 }
 
-static void print_value(const value *val, unsigned nest);
+static void
+print_value(const value *val, unsigned nest);
 
-static void print_member(const member *mem, unsigned nest)
+static void
+print_member(const member *mem, unsigned nest)
 {
 	print_string(mem->key);
 	printf(": ");
 	print_value(&mem->val, nest);
 }
 
-static void print_value(const value *val, unsigned nest)
+static void
+print_value(const value *val, unsigned nest)
 {
 	switch (value_kind(val->tag)) {
 	case VALUE_NULL:
@@ -1046,13 +1101,15 @@ static void print_value(const value *val, unsigned nest)
 	}
 }
 
-static void print_dom(const value *dom)
+static void
+print_dom(const value *dom)
 {
 	print_value(dom, 0);
 	putchar('\n');
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	/* C locale braindeath. */
 	const void *dec_point = localeconv()->decimal_point;
@@ -1067,7 +1124,7 @@ int main(int argc, char *argv[])
 	}
 	else {
 		stream = fopen(argv[1], "rb");
-		if (unlikely(stream == NULL))
+		if unlikely (stream == NULL)
 			return ret;
 	}
 
@@ -1075,7 +1132,7 @@ int main(int argc, char *argv[])
 	if (stream != stdin)
 		(void) fclose(stream);
 
-	if (unlikely(filebuf.size == 0))
+	if unlikely (filebuf.size == 0)
 		return ret;
 
 	lina lin = lina_new(32 * 1024);

@@ -22,7 +22,8 @@
 #	define fallthrough
 #endif
 
-static int errno_helper(int ne)
+static int
+errno_helper(int ne)
 {
 	int e = errno;
 	errno = (ne <= 0 ? 0 : ne);
@@ -34,7 +35,8 @@ typedef struct {
 	long val;
 } atol_res;
 
-static atol_res xatol(const char *str)
+static atol_res
+xatol(const char *str)
 {
 	int err = errno_helper(0);
 	char *endptr;
@@ -65,7 +67,8 @@ static const char *event_name(enum pjson_event ev)
 	return table[ev];
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	int ret = EXIT_FAILURE;
 

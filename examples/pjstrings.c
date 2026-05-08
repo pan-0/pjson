@@ -18,18 +18,26 @@
 #include <string.h>  /* strcmp() */
 #include <unistd.h>  /* getopt() */
 
+#ifdef __GNUC__
+#	define fallthrough __attribute__((__fallthrough__))
+#else
+#	define fallthrough
+#endif
+
 enum stringtype {
 	TYPE_KEYS   = 1u,
 	TYPE_VALUES = 1u << 1,
 	TYPE_ALL    = TYPE_KEYS | TYPE_VALUES
 };
 
-static void print_code(pjson_result res)
+static void
+print_code(pjson_result res)
 {
 	fwrite(res.code_bytes, 1, res.code_size, stdout);
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	int ret = EXIT_FAILURE;
 
@@ -85,9 +93,7 @@ int main(int argc, char *argv[])
 			switch (res.status) {
 			case PJSON_STATUS_ACCEPT:
 				++i;
-#				ifdef __GNUC__
-				__attribute__((__fallthrough__));
-#				endif
+				fallthrough;
 			case PJSON_STATUS_ACCEPT_RETRY:
 				switch (res.event) {
 				case PJSON_EVENT_STRING_CODE:
