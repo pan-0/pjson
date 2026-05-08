@@ -6,13 +6,13 @@
 #include <stdbool.h>  /* bool, false, true */
 
 #ifdef __GNUC__
-#   define pj_likely(x)   __builtin_expect(!!(x), 1)
-#   define pj_unlikely(x) __builtin_expect(!!(x), 0)
+#   define pj_likely(x)   (__builtin_expect(!!(x), 1))
+#   define pj_unlikely(x) (__builtin_expect(!!(x), 0))
 #   define pj_fallthrough __attribute__((__fallthrough__))
 #   define pj_const       __attribute__((__const__))
 #else
-#   define pj_likely(x)   (x)
-#   define pj_unlikely(x) (x)
+#   define pj_likely
+#   define pj_unlikely
 #   define pj_fallthrough
 #   define pj_const
 #endif
@@ -42,10 +42,11 @@
 #       elif defined _MSC_VER
         __declspec(noinline)
 #       endif
-        static void pj_assert_print_(const char *file,
-                                     int line,
-                                     const char *func,
-                                     const char *inv)
+        static void
+        pj_assert_print_(const char *file,
+                         int line,
+                         const char *func,
+                         const char *inv)
         {
             fprintf(stderr, "%s:%d: %s: Assertion `%s' failed.\n",
                     file, line, func, inv);
@@ -56,7 +57,7 @@
 #   ifdef __GNUC__
 #       define pj_assert(c)                                             \
             __extension__ ({                                            \
-                if (pj_likely(c)) {                                     \
+                if pj_likely (c) {                                      \
                     ;                                                   \
                 }                                                       \
                 else {                                                  \
@@ -106,7 +107,8 @@ typedef pjson_usize pj_usize;
 
 /* [a, b] */
 pj_const inline
-static bool pj_inrange(unsigned long x, unsigned long a, unsigned long b)
+static bool
+pj_inrange(unsigned long x, unsigned long a, unsigned long b)
 {
 	pj_assume(a < b);
 
@@ -176,26 +178,27 @@ enum pj_utf8_state {
 	PJ_UTF8_STATE_3_2,
 };
 
-static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
+static pj_utf8_result
+pj_utf8_push(pjson_context *ctx, unsigned byte)
 {
 	pj_assume((byte <= 0xFF) | (byte == (unsigned)PJSON_END));
 
 	switch ((enum pj_utf8_state)ctx->utf8_state) {
 	case PJ_UTF8_STATE_BOM_0:
-		if (pj_unlikely((byte & 0xFF) == 0xEF)) {
+		if pj_unlikely ((byte & 0xFF) == 0xEF) {
 			ctx->utf8_state = PJ_UTF8_STATE_BOM_1;
 			return (pj_utf8_result){PJ_UTF8_OKAY};
 		}
 		ctx->utf8_state = PJ_UTF8_STATE_0;
 		goto state_0;
 	case PJ_UTF8_STATE_BOM_1:
-		if (pj_unlikely((byte & 0xFF) != 0xBB))
+		if pj_unlikely ((byte & 0xFF) != 0xBB)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		ctx->utf8_state = PJ_UTF8_STATE_BOM_2;
 		return (pj_utf8_result){PJ_UTF8_OKAY};
 	case PJ_UTF8_STATE_BOM_2:
-		if (pj_unlikely((byte & 0xFF) != 0xBF))
+		if pj_unlikely ((byte & 0xFF) != 0xBF)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		ctx->utf8_state = PJ_UTF8_STATE_0;
@@ -203,7 +206,7 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 
 	case PJ_UTF8_STATE_0:
 	state_0:
-		if (pj_unlikely((byte & 0x80) != 0)) {
+		if pj_unlikely ((byte & 0x80) != 0) {
 			if ((byte & 0xE0) == 0xC0)
 				ctx->utf8_state = PJ_UTF8_STATE_1;
 			else if ((byte & 0xF0) == 0xE0)
@@ -222,14 +225,14 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 		return (pj_utf8_result){PJ_UTF8_ACCEPT, (pjson_codepoint)byte};
 
 	case PJ_UTF8_STATE_1:
-		if (pj_unlikely((byte & 0xC0) != 0x80))
+		if pj_unlikely ((byte & 0xC0) != 0x80)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		{
 			pjson_codepoint buf = ctx->utf8_buf;
 			buf |= (pjson_codepoint)(byte & 0xFF) << 8;
 			pjson_codepoint res = (buf & 0x1F) << 6 | ((buf >> 8) & 0x3F);
-			if (pj_unlikely(res < 128))
+			if pj_unlikely (res < 128)
 				return (pj_utf8_result){PJ_UTF8_ERROR};
 
 			ctx->utf8_state = PJ_UTF8_STATE_0;
@@ -237,14 +240,14 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 		}
 
 	case PJ_UTF8_STATE_2:
-		if (pj_unlikely((byte & 0xC0) != 0x80))
+		if pj_unlikely ((byte & 0xC0) != 0x80)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		ctx->utf8_buf |= (pjson_codepoint)(byte & 0xFF) << 8;
 		ctx->utf8_state = PJ_UTF8_STATE_2_1;
 		return (pj_utf8_result){PJ_UTF8_OKAY};
 	case PJ_UTF8_STATE_2_1:
-		if (pj_unlikely((byte & 0xC0) != 0x80))
+		if pj_unlikely ((byte & 0xC0) != 0x80)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		{
@@ -254,7 +257,7 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 			pjson_codepoint res = (buf & 0xFF) << 12
 			                      | (buf & 0xFF00) >> 2
 			                      | (buf & 16);
-			if (pj_unlikely(!(pj_inrange(res, 2048, 55295) | (res > 57343))))
+			if pj_unlikely (!(pj_inrange(res, 2048, 55295) | (res > 57343)))
 				return (pj_utf8_result){PJ_UTF8_ERROR};
 
 			ctx->utf8_state = PJ_UTF8_STATE_0;
@@ -262,21 +265,21 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 		}
 
 	case PJ_UTF8_STATE_3:
-		if (pj_unlikely((byte & 0xC0) != 0x80))
+		if pj_unlikely ((byte & 0xC0) != 0x80)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		ctx->utf8_buf |= (pjson_codepoint)(byte & 0xFF) << 8;
 		ctx->utf8_state = PJ_UTF8_STATE_3_1;
 		return (pj_utf8_result){PJ_UTF8_OKAY};
 	case PJ_UTF8_STATE_3_1:
-		if (pj_unlikely((byte & 0xC0) != 0x80))
+		if pj_unlikely ((byte & 0xC0) != 0x80)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		ctx->utf8_buf |= (pjson_codepoint)(byte & 0xFF) << 16;
 		ctx->utf8_state = PJ_UTF8_STATE_3_2;
 		return (pj_utf8_result){PJ_UTF8_OKAY};
 	case PJ_UTF8_STATE_3_2:
-		if (pj_unlikely((byte & 0xC0) != 0x80))
+		if pj_unlikely ((byte & 0xC0) != 0x80)
 			return (pj_utf8_result){PJ_UTF8_ERROR};
 
 		{
@@ -287,7 +290,7 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 			                      | (buf & 0xFF00) << 4
 			                      | (buf & 0xFF0000) >> 10
 			                      | buf >> 24;
-			if (pj_unlikely(!pj_inrange(res, 65536, 1114111)))
+			if pj_unlikely (!pj_inrange(res, 65536, 1114111))
 				return (pj_utf8_result){PJ_UTF8_ERROR};
 
 			ctx->utf8_state = PJ_UTF8_STATE_0;
@@ -301,7 +304,9 @@ static pj_utf8_result pj_utf8_push(pjson_context *ctx, unsigned byte)
 }
 
 /* Assumes that `codepoint` is valid. */
-pj_const inline static pj_usize pj_utf8_code_size(pjson_codepoint codepoint)
+pj_const inline
+static pj_usize
+pj_utf8_code_size(pjson_codepoint codepoint)
 {
 	return 1 + (codepoint >= 0x0080)
 	         + (codepoint >= 0x0800)
@@ -310,22 +315,30 @@ pj_const inline static pj_usize pj_utf8_code_size(pjson_codepoint codepoint)
 
 /* <https://unicodebook.readthedocs.io/unicode_encodings.html> */
 
-pj_const inline static bool pj_is_surrogate(pjson_codepoint codepoint)
+pj_const inline
+static bool
+pj_is_surrogate(pjson_codepoint codepoint)
 {
 	return pj_inrange(codepoint, 0xD800, 0xDFFF);
 }
 
-pj_const inline static bool pj_is_high_surrogate(pjson_codepoint codepoint)
+pj_const inline
+static bool
+pj_is_high_surrogate(pjson_codepoint codepoint)
 {
 	return pj_inrange(codepoint, 0xD800, 0xDBFF);
 }
 
-pj_const inline static bool pj_is_low_surrogate(pjson_surrogate codepoint)
+pj_const inline
+static bool
+pj_is_low_surrogate(pjson_surrogate codepoint)
 {
 	return pj_inrange(codepoint, 0xDC00, 0xDFFF);
 }
 
-pj_const inline static bool pj_is_valid_codepoint(pjson_codepoint codepoint)
+pj_const inline
+static bool
+pj_is_valid_codepoint(pjson_codepoint codepoint)
 {
 	/*
 	 * Allow non-characters.
@@ -335,11 +348,12 @@ pj_const inline static bool pj_is_valid_codepoint(pjson_codepoint codepoint)
 	return pj_inrange(codepoint, 0, 0x10FFFF) && !pj_is_surrogate(codepoint);
 }
 
-static pj_usize pj_utf8_encode(unsigned char *dest, pjson_codepoint codepoint)
+static pj_usize
+pj_utf8_encode(unsigned char *dest, pjson_codepoint codepoint)
 {
 	pj_assume(pj_is_valid_codepoint(codepoint));
 
-	if (pj_likely(codepoint < 0x0080)) {
+	if pj_likely (codepoint < 0x0080) {
 		dest[0] = codepoint & 0xFF;
 		return 1;
 	}
@@ -364,8 +378,9 @@ static pj_usize pj_utf8_encode(unsigned char *dest, pjson_codepoint codepoint)
 	return 4;
 }
 
-pj_const inline static
-pjson_codepoint pj_utf16_decode_pair(pjson_surrogate high, pjson_surrogate low)
+pj_const inline
+static pjson_codepoint
+pj_utf16_decode_pair(pjson_surrogate high, pjson_surrogate low)
 {
 	pj_assume(pj_is_high_surrogate(high) & pj_is_low_surrogate(low));
 
@@ -378,18 +393,24 @@ pjson_codepoint pj_utf16_decode_pair(pjson_surrogate high, pjson_surrogate low)
  * Lexer.
  */
 
-pj_const inline static bool pj_is_digit(pjson_codepoint codepoint)
+pj_const inline
+static bool
+pj_is_digit(pjson_codepoint codepoint)
 {
 	return pj_inrange(codepoint, PJ_SYMBOL_0, PJ_SYMBOL_9);
 }
 
-pj_const inline static bool pj_is_hexdigit(pjson_codepoint codepoint)
+pj_const inline
+static bool
+pj_is_hexdigit(pjson_codepoint codepoint)
 {
 	return pj_is_digit(codepoint)
 	       | (((unsigned long)codepoint | 32) - PJ_SYMBOL_a < 6);
 }
 
-pj_const inline static unsigned pj_hex_to_bin(pjson_codepoint codepoint)
+pj_const inline
+static unsigned
+pj_hex_to_bin(pjson_codepoint codepoint)
 {
 	pj_assume(pj_is_hexdigit(codepoint));
 
@@ -456,10 +477,11 @@ enum pj_lexer_event {
 	PJ_LEXER_EVENT_DONE
 };
 
-pj_const
-inline static pjson_result pj_lexer_coded_result(enum pjson_status status,
-                                                 enum pj_lexer_event event,
-                                                 pjson_codepoint codepoint)
+pj_const inline
+static pjson_result
+pj_lexer_coded_result(enum pjson_status status,
+                      enum pj_lexer_event event,
+                      pjson_codepoint codepoint)
 {
 	/*
 	 * Subtle: This also zero-initializes the `code_bytes` array, which we
@@ -474,10 +496,11 @@ inline static pjson_result pj_lexer_coded_result(enum pjson_status status,
 	return res;
 }
 
-pj_const
-inline static pjson_result pj_lexer_ascii_result(enum pjson_status status,
-                                                 enum pj_lexer_event event,
-                                                 pjson_codepoint codepoint)
+pj_const inline
+static pjson_result
+pj_lexer_ascii_result(enum pjson_status status,
+                      enum pj_lexer_event event,
+                      pjson_codepoint codepoint)
 {
 	pj_assume(codepoint < 128);
 
@@ -487,8 +510,8 @@ inline static pjson_result pj_lexer_ascii_result(enum pjson_status status,
 	                      .code_bytes={codepoint, '\0'}};
 }
 
-static
-pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
+static pjson_result
+pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 {
 	pj_assume(pj_is_valid_codepoint(codepoint)
 	          | (codepoint == (pjson_codepoint)PJSON_END));
@@ -568,21 +591,21 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 
 	/* [n]ull */
 	case PJ_LEXER_STATE_NULL_u:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_u))
+		if pj_unlikely (codepoint != PJ_SYMBOL_u)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_NULL_l;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_NULL_l:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_l))
+		if pj_unlikely (codepoint != PJ_SYMBOL_l)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_NULL_l2;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_NULL_l2:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_l))
+		if pj_unlikely (codepoint != PJ_SYMBOL_l)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
@@ -591,21 +614,21 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 
 	/* [t]rue */
 	case PJ_LEXER_STATE_TRUE_r:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_r))
+		if pj_unlikely (codepoint != PJ_SYMBOL_r)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_TRUE_u;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_TRUE_u:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_u))
+		if pj_unlikely (codepoint != PJ_SYMBOL_u)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_TRUE_e;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_TRUE_e:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_e))
+		if pj_unlikely (codepoint != PJ_SYMBOL_e)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
@@ -614,28 +637,28 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 
 	/* [f]alse */
 	case PJ_LEXER_STATE_FALSE_a:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_a))
+		if pj_unlikely (codepoint != PJ_SYMBOL_a)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_FALSE_l;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_FALSE_l:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_l))
+		if pj_unlikely (codepoint != PJ_SYMBOL_l)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_FALSE_s;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_FALSE_s:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_s))
+		if pj_unlikely (codepoint != PJ_SYMBOL_s)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
 		ctx->lexer_state = PJ_LEXER_STATE_FALSE_e;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_FALSE_e:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_e))
+		if pj_unlikely (codepoint != PJ_SYMBOL_e)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_UNKNOWN};
 
@@ -649,7 +672,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 	 * exp    = [eE] [\-\+]? [0-9]+
 	 */
 	case PJ_LEXER_STATE_NUMBER_019:
-		if (pj_unlikely(!pj_is_digit(codepoint)))
+		if pj_unlikely (!pj_is_digit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_DIGIT};
 
@@ -705,7 +728,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		                             PJ_LEXER_EVENT_NUMBER_CODE,
 		                             codepoint);
 	case PJ_LEXER_STATE_NUMBER_FRAC_09:
-		if (pj_unlikely(!pj_is_digit(codepoint)))
+		if pj_unlikely (!pj_is_digit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_DIGIT};
 
@@ -746,7 +769,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 
 		return (pjson_result){PJSON_STATUS_ERROR, PJSON_EVENT_ERROR_EXPONENT};
 	case PJ_LEXER_STATE_NUMBER_EXP_09:
-		if (pj_unlikely(!pj_is_digit(codepoint)))
+		if pj_unlikely (!pj_is_digit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_EXPONENT};
 
@@ -782,13 +805,13 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 	 * unescaped = %x20-21 / %x23-5B / %x5D-10FFFF
 	 */
 	case PJ_LEXER_STATE_STRING:
-		if (pj_unlikely(codepoint == PJ_SYMBOL_QUOT_MARK)) {
+		if pj_unlikely (codepoint == PJ_SYMBOL_QUOT_MARK) {
 			ctx->lexer_state = PJ_LEXER_STATE_INITIAL;
 			return (pjson_result){PJSON_STATUS_ACCEPT,
 			                      PJ_LEXER_EVENT_END_STRING};
 		}
 
-		if (pj_unlikely(codepoint == PJ_SYMBOL_BACKSLASH)) {
+		if pj_unlikely (codepoint == PJ_SYMBOL_BACKSLASH) {
 			ctx->lexer_state = PJ_LEXER_STATE_STRING_ESC;
 			return (pjson_result){PJSON_STATUS_OKAY};
 		}
@@ -797,9 +820,9 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		 * Allowed unescaped characters per RFC 8259. This check also takes
 		 * care of (disallowed) unescaped control characters.
 		 */
-		if (pj_unlikely(!(pj_inrange(codepoint, 0x20, 0x21)
+		if pj_unlikely (!(pj_inrange(codepoint, 0x20, 0x21)
 		                  | pj_inrange(codepoint, 0x23, 0x5B)
-		                  | pj_inrange(codepoint, 0x5D, 0x10FFFF))))
+		                  | pj_inrange(codepoint, 0x5D, 0x10FFFF)))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_CODEPOINT};
 
@@ -850,7 +873,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 			                      PJSON_EVENT_ERROR_ESCAPE};
 		}
 	case PJ_LEXER_STATE_STRING_HIGH_u0:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
@@ -858,7 +881,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_HIGH_u1;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_HIGH_u1:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
@@ -866,7 +889,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_HIGH_u2;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_HIGH_u2:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
@@ -874,18 +897,18 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_HIGH_u3;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_HIGH_u3:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
 		{
 			pjson_surrogate high = ctx->high | pj_hex_to_bin(codepoint);
-			if (pj_unlikely(pj_is_surrogate(high))) {
+			if pj_unlikely (pj_is_surrogate(high)) {
 				/*
 				 * DON'T use a replacement character! Intentionally be as
 				 * strict as possible.
 				 */
-				if (pj_unlikely(pj_is_low_surrogate(high)))
+				if pj_unlikely (pj_is_low_surrogate(high))
 					return (pjson_result){PJSON_STATUS_ERROR,
 					                      PJSON_EVENT_ERROR_HIGH_LOW};
 
@@ -901,19 +924,19 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 			                             (pjson_codepoint)high);
 		}
 	case PJ_LEXER_STATE_STRING_LOW_ESC:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_BACKSLASH))
+		if pj_unlikely (codepoint != PJ_SYMBOL_BACKSLASH)
 			return (pjson_result){PJSON_STATUS_ERROR, PJSON_EVENT_ERROR_LOW};
 
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_LOW_u;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_LOW_u:
-		if (pj_unlikely(codepoint != PJ_SYMBOL_u))
+		if pj_unlikely (codepoint != PJ_SYMBOL_u)
 			return (pjson_result){PJSON_STATUS_ERROR, PJSON_EVENT_ERROR_LOW};
 
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_LOW_u0;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_LOW_u0:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
@@ -921,7 +944,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_LOW_u1;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_LOW_u1:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
@@ -929,7 +952,7 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_LOW_u2;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_LOW_u2:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
@@ -937,13 +960,13 @@ pjson_result pj_lexer_push(pjson_context *ctx, pjson_codepoint codepoint)
 		ctx->lexer_state = PJ_LEXER_STATE_STRING_LOW_u3;
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_LEXER_STATE_STRING_LOW_u3:
-		if (pj_unlikely(!pj_is_hexdigit(codepoint)))
+		if pj_unlikely (!pj_is_hexdigit(codepoint))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_HEXDIGIT};
 
 		{
 			pjson_surrogate low = ctx->low | pj_hex_to_bin(codepoint);
-			if (pj_unlikely(!pj_is_low_surrogate(low)))
+			if pj_unlikely (!pj_is_low_surrogate(low))
 				return (pjson_result){PJSON_STATUS_ERROR,
 				                      PJSON_EVENT_ERROR_LOW};
 
@@ -994,8 +1017,9 @@ enum {
 	PJ_MASK       = (1u << PJ_STATE_BITS) - 1
 };
 
-inline static
-enum pj_parser_state pj_stack_get(const pjson_context *ctx, pj_usize index)
+inline
+static enum pj_parser_state
+pj_stack_get(const pjson_context *ctx, pj_usize index)
 {
 	/*
 	 *   7654 3210
@@ -1010,10 +1034,9 @@ enum pj_parser_state pj_stack_get(const pjson_context *ctx, pj_usize index)
 	                              & PJ_MASK);
 }
 
-inline static
-void pj_stack_set(pjson_context *ctx,
-                  pj_usize index,
-                  enum pj_parser_state state)
+inline
+static void
+pj_stack_set(pjson_context *ctx, pj_usize index, enum pj_parser_state state)
 {
 	pj_usize row = index / PJ_COLUMNS;
 	pj_usize col = index % PJ_COLUMNS;
@@ -1025,12 +1048,16 @@ void pj_stack_set(pjson_context *ctx,
 /* x != 0 */
 #define pj_ceil_div(x, y) (1 + ((x) - 1) / (y))
 
-inline static bool pj_stack_is_topped(const pjson_context *ctx, pj_usize top)
+inline
+static bool
+pj_stack_is_topped(const pjson_context *ctx, pj_usize top)
 {
 	return (top == 0) | (pj_ceil_div(top, PJ_COLUMNS) >= ctx->stack_size);
 }
 
-inline static pj_usize pj_stack_used(const pjson_context *ctx)
+inline
+static pj_usize
+pj_stack_used(const pjson_context *ctx)
 {
 	return pj_ceil_div(ctx->stack_top + 1, PJ_COLUMNS);
 }
@@ -1041,22 +1068,28 @@ inline static pj_usize pj_stack_used(const pjson_context *ctx)
 #define pj_stack_get(ctx, index) ((enum pj_parser_state)(ctx)->stack[(index)])
 #define pj_stack_set(ctx, index, state) ((ctx)->stack[(index)] = (state))
 
-inline static bool pj_stack_is_topped(const pjson_context *ctx, pj_usize top)
+inline
+static bool
+pj_stack_is_topped(const pjson_context *ctx, pj_usize top)
 {
 	return (top == 0) | (top >= ctx->stack_size);
 }
 
-inline static pj_usize pj_stack_used(const pjson_context *ctx)
+inline
+static pj_usize
+pj_stack_used(const pjson_context *ctx)
 {
 	return ctx->stack_top + 1;  /* Hopefully no wrap-around. */
 }
 
 #endif  /* PJ_NODIV */
 
-inline static bool pj_stack_reserve_top(pjson_context *ctx)
+inline
+static bool
+pj_stack_reserve_top(pjson_context *ctx)
 {
 	pj_usize top = ctx->stack_top + 1;
-	if (pj_unlikely(pj_stack_is_topped(ctx, top)))
+	if pj_unlikely (pj_stack_is_topped(ctx, top))
 		return true;
 
 	ctx->stack_top = top;
@@ -1064,10 +1097,11 @@ inline static bool pj_stack_reserve_top(pjson_context *ctx)
 }
 
 inline
-static bool pj_stack_push(pjson_context *ctx, enum pj_parser_state state)
+static bool
+pj_stack_push(pjson_context *ctx, enum pj_parser_state state)
 {
 	pj_usize top = ctx->stack_top + 1;
-	if (pj_unlikely(pj_stack_is_topped(ctx, top)))
+	if pj_unlikely (pj_stack_is_topped(ctx, top))
 		return true;
 
 	pj_stack_set(ctx, top, state);
@@ -1075,16 +1109,17 @@ static bool pj_stack_push(pjson_context *ctx, enum pj_parser_state state)
 	return false;
 }
 
-inline static void pj_stack_pop(pjson_context *ctx)
+inline
+static void
+pj_stack_pop(pjson_context *ctx)
 {
 	pj_assume(ctx->stack_top > 0);
 
 	--(ctx->stack_top);
 }
 
-static pjson_result pj_parse_value(pjson_context *ctx,
-                                   pjson_result lexer_res,
-                                   pj_usize top)
+static pjson_result
+pj_parse_value(pjson_context *ctx, pjson_result lexer_res, pj_usize top)
 {
 	switch (lexer_res.event) {
 	case PJ_LEXER_EVENT_TOKEN_NULL:
@@ -1115,7 +1150,8 @@ static pjson_result pj_parse_value(pjson_context *ctx,
 	}
 }
 
-static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
+static pjson_result
+pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 {
 	/*
 	 * root = value
@@ -1158,12 +1194,12 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 			return lexer_res;
 		}
 
-		if (pj_unlikely(pj_stack_reserve_top(ctx)))
+		if pj_unlikely (pj_stack_reserve_top(ctx))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
 		lexer_res = pj_parse_value(ctx, lexer_res, top + 1);
-		if (pj_unlikely(lexer_res.status == PJSON_STATUS_ERROR))
+		if pj_unlikely (lexer_res.status == PJSON_STATUS_ERROR)
 			pj_stack_pop(ctx);
 		else
 			pj_stack_set(ctx, top, PJ_PARSER_STATE_ELEMENT_AFTER);
@@ -1171,7 +1207,7 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 	case PJ_PARSER_STATE_ELEMENT_AFTER:
 		switch (lexer_res.event) {
 		case PJ_LEXER_EVENT_TOKEN_COMMA:
-			if (pj_unlikely(pj_stack_push(ctx, PJ_PARSER_STATE_VALUE)))
+			if pj_unlikely (pj_stack_push(ctx, PJ_PARSER_STATE_VALUE))
 				return (pjson_result){PJSON_STATUS_ERROR,
 				                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
@@ -1188,7 +1224,7 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 	case PJ_PARSER_STATE_MEMBER_LIST:
 		switch (lexer_res.event) {
 		case PJ_LEXER_EVENT_BEGIN_STRING:
-			if (pj_unlikely(pj_stack_push(ctx, PJ_PARSER_STATE_WAIT_TOKEN)))
+			if pj_unlikely (pj_stack_push(ctx, PJ_PARSER_STATE_WAIT_TOKEN))
 				return (pjson_result){PJSON_STATUS_ERROR,
 				                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
@@ -1201,22 +1237,22 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 			return (pjson_result){PJSON_STATUS_ERROR, PJSON_EVENT_ERROR_TOKEN};
 		}
 	case PJ_PARSER_STATE_MEMBER_STRING:
-		if (pj_unlikely(lexer_res.event != PJ_LEXER_EVENT_BEGIN_STRING))
+		if pj_unlikely (lexer_res.event != PJ_LEXER_EVENT_BEGIN_STRING)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_EXPECT_STRING};
 
-		if (pj_unlikely(pj_stack_push(ctx, PJ_PARSER_STATE_WAIT_TOKEN)))
+		if pj_unlikely (pj_stack_push(ctx, PJ_PARSER_STATE_WAIT_TOKEN))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
 		pj_stack_set(ctx, top, PJ_PARSER_STATE_MEMBER_COLON);
 		return (pjson_result){PJSON_STATUS_OKAY};
 	case PJ_PARSER_STATE_MEMBER_COLON:
-		if (pj_unlikely(lexer_res.event != PJ_LEXER_EVENT_TOKEN_COLON))
+		if pj_unlikely (lexer_res.event != PJ_LEXER_EVENT_TOKEN_COLON)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_EXPECT_COLON};
 
-		if (pj_unlikely(pj_stack_push(ctx, PJ_PARSER_STATE_VALUE)))
+		if pj_unlikely (pj_stack_push(ctx, PJ_PARSER_STATE_VALUE))
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_STACK_LIMIT};
 
@@ -1235,7 +1271,7 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
 		}
 
 	case PJ_PARSER_STATE_DONE:
-		if (pj_unlikely(lexer_res.event != PJ_LEXER_EVENT_DONE))
+		if pj_unlikely (lexer_res.event != PJ_LEXER_EVENT_DONE)
 			return (pjson_result){PJSON_STATUS_ERROR,
 			                      PJSON_EVENT_ERROR_EXPECT_DONE};
 
@@ -1252,7 +1288,9 @@ static pjson_result pj_parser_push(pjson_context *ctx, pjson_result lexer_res)
  * API.
  */
 
-inline static void pj_reset(pjson_context *ctx)
+inline
+static void
+pj_reset(pjson_context *ctx)
 {
 	ctx->utf8_state  = PJ_UTF8_STATE_BOM_0;
 	ctx->lexer_state = PJ_LEXER_STATE_INITIAL;
@@ -1261,7 +1299,8 @@ inline static void pj_reset(pjson_context *ctx)
 	pj_stack_set(ctx, 1, PJ_PARSER_STATE_VALUE);
 }
 
-PJSON_API void pjson_init(pjson_context *restrict ctx, pjson_block block)
+PJSON_API void
+pjson_init(pjson_context *restrict ctx, pjson_block block)
 {
 	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
@@ -1272,7 +1311,8 @@ PJSON_API void pjson_init(pjson_context *restrict ctx, pjson_block block)
 	pj_reset(ctx);
 }
 
-PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
+PJSON_API pjson_result
+pjson_push(pjson_context *ctx, int byte)
 {
 	pj_assume(((byte >= 0) & (byte <= 0xFF)) | (byte == PJSON_END));
 
@@ -1312,7 +1352,7 @@ PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
 	}
 
 	pjson_result res = pj_parser_push(ctx, lexer_res);
-	if (pj_unlikely(res.status == PJSON_STATUS_ERROR)) {
+	if pj_unlikely (res.status == PJSON_STATUS_ERROR) {
 		if (lexer_res.status != PJSON_STATUS_ACCEPT_RETRY) {
 			ctx->utf8_state = utf8_state;
 			ctx->utf8_buf = utf8_buf;
@@ -1329,8 +1369,8 @@ PJSON_API pjson_result pjson_push(pjson_context *ctx, int byte)
 	return res;
 }
 
-PJSON_API pjson_result pjson_push_codepoint(pjson_context *ctx,
-                                            pjson_codepoint codepoint)
+PJSON_API pjson_result
+pjson_push_codepoint(pjson_context *ctx, pjson_codepoint codepoint)
 {
 	unsigned char lexer_state = ctx->lexer_state;
 
@@ -1349,7 +1389,7 @@ PJSON_API pjson_result pjson_push_codepoint(pjson_context *ctx,
 	}
 
 	pjson_result res = pj_parser_push(ctx, lexer_res);
-	if (pj_unlikely(res.status == PJSON_STATUS_ERROR)) {
+	if pj_unlikely (res.status == PJSON_STATUS_ERROR) {
 		ctx->lexer_state = lexer_state;
 		ctx->byte_count -= code_size;
 	}
@@ -1357,7 +1397,8 @@ PJSON_API pjson_result pjson_push_codepoint(pjson_context *ctx,
 	return res;
 }
 
-PJSON_API enum pjson_state pjson_current_state(const pjson_context *ctx)
+PJSON_API enum pjson_state
+pjson_current_state(const pjson_context *ctx)
 {
 	static const unsigned char to_pub[] = {
 #		if 0
@@ -1381,7 +1422,8 @@ PJSON_API enum pjson_state pjson_current_state(const pjson_context *ctx)
 	return (enum pjson_state)to_pub[top_val - 2];
 }
 
-PJSON_API void pjson_resize(pjson_context *restrict ctx, pjson_block block)
+PJSON_API void
+pjson_resize(pjson_context *restrict ctx, pjson_block block)
 {
 	pj_assert((block.size >= PJ_MIN_STACK) & (block.ptr != (void *)0));
 
@@ -1389,22 +1431,26 @@ PJSON_API void pjson_resize(pjson_context *restrict ctx, pjson_block block)
 	ctx->stack = block.ptr;
 }
 
-PJSON_API void pjson_reset(pjson_context *ctx)
+PJSON_API void
+pjson_reset(pjson_context *ctx)
 {
 	pj_reset(ctx);
 }
 
-PJSON_API pjson_block pjson_context_block(const pjson_context *ctx)
+PJSON_API pjson_block
+pjson_context_block(const pjson_context *ctx)
 {
 	return (pjson_block){ctx->stack_size, ctx->stack};
 }
 
-PJSON_API pjson_usize pjson_position(const pjson_context *ctx)
+PJSON_API pjson_usize
+pjson_position(const pjson_context *ctx)
 {
 	return ctx->byte_count;
 }
 
-PJSON_API pjson_usize pjson_stack_used(const pjson_context *ctx)
+PJSON_API pjson_usize
+pjson_stack_used(const pjson_context *ctx)
 {
 	return pj_stack_used(ctx);
 }
